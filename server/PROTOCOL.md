@@ -14,7 +14,7 @@ Every message is JSON with a `type`.
 | type | fields | reply |
 |---|---|---|
 | `host:create` | `game` (id like `dying-to-know`), `maxPlayers` | `room:created { code, hostToken, game, maxPlayers }` |
-| `host:resume` | `code`, `hostToken` | `room:resumed { ...room, players[] }` (rejoin after a disconnect, within 60s) |
+| `host:resume` | `code`, `hostToken` | `room:resumed { ...room, players[] }` (rejoin after a disconnect, within 20s) |
 | `room:lock` | `locked` (default true) | none; new players are refused, but reconnects still work |
 | `player:kick` | `playerId` | `player:removed { playerId }` |
 | `room:close` | none | everyone gets `room:closed` |

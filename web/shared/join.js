@@ -26,6 +26,7 @@
 
   const controllers = {};
   const messageHandlers = [];
+  let earlyMessages = []; // messages that arrive before the game's controller is ready
   let client = null;
 
   const store = {
@@ -125,7 +126,11 @@
 
     client = new RoomClient();
     client.on('joined', onJoined);
-    client.on('message', (data) => messageHandlers.forEach((fn) => fn(data)));
+    earlyMessages = [];
+    client.on('message', (data) => {
+      if (messageHandlers.length) messageHandlers.forEach((fn) => fn(data));
+      else earlyMessages.push(data);
+    });
     client.on('error', (err) => {
       if (client.player && err.code !== 'OFFLINE') return; // in-game errors don't kick you out
       store.remove(sessionStorage, SESSION_KEY);
@@ -163,7 +168,11 @@
       player: msg.player,
       code: msg.code,
       send: (data) => client.send(data),
-      onMessage: (fn) => messageHandlers.push(fn),
+      onMessage: (fn) => {
+        messageHandlers.push(fn);
+        earlyMessages.forEach((data) => fn(data)); // e.g. the colour, sent while the controller was loading
+        earlyMessages = [];
+      },
     });
   }
 
