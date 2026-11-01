@@ -21,8 +21,7 @@ body[data-game='dying-to-know'] {
 .dtk-header {
   display: flex;
   justify-content: center;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
   background-color: var(--player-color, #0b0805);
   background-image: url('assets/knit.svg');
@@ -67,7 +66,7 @@ body[data-game='dying-to-know'] {
 .dtk-vip {
   position: relative;
   z-index: 1;
-  font-size: 26px;
+  font-size: 32px;
   letter-spacing: 0.04em;
 }
 
@@ -142,13 +141,13 @@ body[data-game='dying-to-know'] {
 }
 
 .dtk-vip {
-  font-size: 15px;
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
   letter-spacing: 2px;
-  color: #efe6d2;
-}
-
-.dtk-header.has-color .dtk-vip {
-  color: #120d08;
+  color: #ffffff; /* same as the VIP tag on the TV */
 }
 
 /* VIP start button */
