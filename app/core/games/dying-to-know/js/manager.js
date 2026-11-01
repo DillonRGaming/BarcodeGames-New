@@ -228,6 +228,16 @@ class GameManager {
       });
     }
 
+    if (this.roomCodeEl) {
+      this.roomCodeEl.addEventListener('click', () => {
+        if (!this.roomCode) return;
+        navigator.clipboard.writeText(this.roomCode).catch(() => { });
+        this.roomCodeEl.classList.add('copied');
+        setTimeout(() => this.roomCodeEl.classList.remove('copied'), 150);
+        if (this.sound) this.sound.playLight();
+      });
+    }
+
     const backBtn = document.getElementById('lobbyBackBtn');
     if (backBtn) {
       backBtn.addEventListener('click', () => {

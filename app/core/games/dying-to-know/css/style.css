@@ -1109,3 +1109,14 @@ body {
 .code-value.offline {
   opacity: 0.35;
 }
+
+/* Click the room code to copy it */
+.lobby-code-badge .code-value {
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.lobby-code-badge .code-value.copied {
+  transform: scale(1.08);
+}
