@@ -51,17 +51,20 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     body.querySelector('.dtk-title').textContent = title;
   }
 
+  // Same look as the answers on the TV: torn number tile + typewriter text, stacked and centred
   function showQuestion(answers) {
     body.innerHTML = '<div class="dtk-answers"></div>';
     const list = body.querySelector('.dtk-answers');
     answers.forEach((text, index) => {
       const btn = document.createElement('button');
       btn.className = 'dtk-answer';
+      btn.type = 'button';
       btn.innerHTML = '<span class="dtk-answer-num"></span><span class="dtk-answer-text"></span>';
       btn.querySelector('.dtk-answer-num').textContent = index + 1;
       btn.querySelector('.dtk-answer-text').textContent = text;
       btn.addEventListener('click', () => {
         send({ type: 'answer', index });
+        list.classList.add('answered');
         list.querySelectorAll('.dtk-answer').forEach((b) => {
           b.disabled = true;
           b.classList.toggle('picked', b === btn);

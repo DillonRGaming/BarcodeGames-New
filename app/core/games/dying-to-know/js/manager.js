@@ -106,6 +106,12 @@ class GameManager {
     });
     this.net.on('message', (roomId, data) => {
       // The VIP starts the game from their phone
+      // A player locks in an answer (first tap counts, only while the clock runs)
+      if (data.type === 'answer' && this.acceptingAnswers && !this.answers.has(roomId)) {
+        const index = Number(data.index);
+        if (index >= 0 && index < 4) this.answers.set(roomId, index + 1); // 1-based like correctIndex
+        return;
+      }
       if (data.type === 'start') {
         const player = this.playersById.get(roomId);
         if (player && player.isVip && this.gameState === 'LOBBY') this.startLobbyGame();
@@ -572,7 +578,10 @@ class GameManager {
 
     if (!this.isQuestionActive) return;
 
-    // 4. Start 15s countdown
+    // 4. Phones get the answers; start the countdown
+    this.answers = new Map();
+    this.acceptingAnswers = true;
+    this.setPhoneState({ type: 'question', answers: data.answers.map((a) => a.text) });
     this.startQuestionTimer(data.time || 15);
   }
 
@@ -667,11 +676,17 @@ class GameManager {
 
     // 2. Each player chooses randomly; show Tick (✔) only for correct players
     const activePlayers = this.getActivePlayers();
+    this.acceptingAnswers = false;
     activePlayers.forEach((p) => {
-      const playerChoice = Math.floor(Math.random() * 4) + 1;
+      // Real players use their phone answer (no answer = wrong); dev bots still guess
+      const playerChoice = p.roomId
+        ? (this.answers && this.answers.get(p.roomId))
+        : Math.floor(Math.random() * 4) + 1;
       const isCorrect = (playerChoice === correctIdx);
       p.showResult(isCorrect, 0.72);
+      if (p.roomId) this.net.sendTo(p.roomId, { type: 'reveal', correct: isCorrect });
     });
+    this.phoneState = { type: 'wait' }; // a phone reconnecting now shouldn't get answer buttons back
 
     if (this.sound) {
       this.sound.playLight();
