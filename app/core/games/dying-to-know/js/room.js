@@ -346,6 +346,13 @@ class RoomManager {
     item.el.style.height = `${Math.round(window.innerHeight * cfg.heightPct)}px`;
   }
 
+  // On-screen width of a furniture image (height comes from its config)
+  furnitureWidth(type) {
+    const cfg = this.furnitureConfig[type] || { heightPct: 0.15 };
+    const aspect = { 'assets/images/chair.png': 1210 / 2161, 'assets/images/table.png': 2937 / 2196 }[type] || 1.05;
+    return window.innerHeight * cfg.heightPct * aspect;
+  }
+
   findHiddenSlot() {
     return this.furnitureItems.find((it) => !it.type);
   }
@@ -369,7 +376,8 @@ class RoomManager {
         const slot = this.findHiddenSlot();
         if (!slot) break;
         this.activateSlot(slot, x, this.pickBoxType(), flip, bottom);
-        bottom += h + 6 + Math.random() * 14;
+        // Each box sits into the one below (their lids are thin flaps, so a full-height step looks like floating)
+        bottom += h * 0.78;
       }
       return;
     }
@@ -381,9 +389,11 @@ class RoomManager {
       const slot = this.findHiddenSlot();
       if (!slot) return;
       const dir = Math.random() < 0.5 ? -1 : 1;
-      const x = anchor.x + dir * (90 + Math.random() * 130);
       let type = this.pickFurnitureType();
       if (!type) type = this.pickBoxType();
+      // Leave a real gap between the two pieces based on their drawn widths
+      const gap = (this.furnitureWidth(anchor.type) + this.furnitureWidth(type)) / 2 + 20 + Math.random() * 90;
+      const x = anchor.x + dir * gap;
       this.activateSlot(slot, x, type, Math.random() < 0.5, 0);
       return;
     }
