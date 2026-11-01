@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Letter Writer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: #ffffff;
+      cursor: text;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    #page {
+      width: 100%;
+      min-height: 100vh;
+      padding: 60px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 0;
+      min-height: 70px;
+    }
+
+    .word {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .space-gap {
+      display: inline-block;
+      width: 45px;
+      height: 70px;
+      flex-shrink: 0;
+    }
+
+    .letter-img {
+      height: 70px;
+      width: auto;
+      display: block;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .symbol {
+      font-size: 50px;
+      font-weight: 700;
+      line-height: 1;
+      color: #000000;
+      user-select: none;
+      display: inline-block;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 62px;
+      background-color: #000000;
+      animation: blink 1s step-end infinite;
+      margin-left: 2px;
+      vertical-align: bottom;
+      flex-shrink: 0;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    #hiddenInput {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      left: -9999px;
+      top: -9999px;
+    }
+  </style>
+</head>
+<body>
+  <textarea id="hiddenInput" autofocus></textarea>
+  <div id="page"></div>
+
+  <script>
+    const hiddenInput = document.getElementById('hiddenInput');
+    const page = document.getElementById('page');
+
+    function focusInput() {
+      hiddenInput.focus();
+    }
+
+    window.addEventListener('click', focusInput);
+    window.addEventListener('touchstart', focusInput);
+    focusInput();
+
+    function render() {
+      const text = hiddenInput.value;
+      page.innerHTML = '';
+
+      const lines = text.split('\n');
+
+      lines.forEach((lineText, lineIndex) => {
+        const lineEl = document.createElement('div');
+        lineEl.className = 'line';
+
+        const isCurrentLine = (lineIndex === lines.length - 1);
+        let currentWordEl = null;
+
+        for (let i = 0; i < lineText.length; i++) {
+          const char = lineText[i];
+
+          if (char === ' ') {
+            currentWordEl = null;
+            const spaceEl = document.createElement('div');
+            spaceEl.className = 'space-gap';
+            lineEl.appendChild(spaceEl);
+          } else {
+            if (!currentWordEl) {
+              currentWordEl = document.createElement('div');
+              currentWordEl.className = 'word';
+              lineEl.appendChild(currentWordEl);
+            }
+
+            const upper = char.toUpperCase();
+            if (upper >= 'A' && upper <= 'Z') {
+              const img = document.createElement('img');
+              img.src = `Letters2/${upper}.png`;
+              img.alt = upper;
+              img.className = 'letter-img';
+              currentWordEl.appendChild(img);
+            } else {
+              const sym = document.createElement('span');
+              sym.className = 'symbol';
+              sym.textContent = char;
+              currentWordEl.appendChild(sym);
+            }
+          }
+        }
+
+        if (isCurrentLine) {
+          const cursor = document.createElement('span');
+          cursor.className = 'cursor';
+
+          if (currentWordEl) {
+            currentWordEl.appendChild(cursor);
+          } else {
+            lineEl.appendChild(cursor);
+          }
+        }
+
+        page.appendChild(lineEl);
+      });
+    }
+
+    hiddenInput.addEventListener('input', render);
+    hiddenInput.addEventListener('keyup', render);
+
+    render();
+  </script>
+</body>
+</html>

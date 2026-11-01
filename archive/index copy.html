@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wiggle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: "Special Elite", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      background-color: #121212;
+      overflow: hidden;
+      user-select: none;
+      position: relative;
+      perspective: 1200px;
+    }
+
+    #bgLayer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-slice {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: auto;
+      user-select: none;
+      pointer-events: none;
+      will-change: transform;
+      display: block;
+    }
+
+    #furnitureLayer {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      display: none;
+    }
+
+    .furniture {
+      position: absolute;
+      user-select: none;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    .grid-container {      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      perspective: 1200px;
+    }
+
+    .grid-container.lineup {
+      align-items: flex-start;
+      padding-top: 2.5vh;
+    }
+
+    .grid.lineup {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .grid.lineup .letter-slot {
+      width: 92px;
+      height: 135px;
+    }
+
+    .grid.lineup .letter-wrapper {
+      transform: scale(0.72);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, auto);
+      grid-template-rows: repeat(2, auto);
+      column-gap: clamp(30px, 4.5vw, 65px);
+      row-gap: clamp(20px, 3.5vh, 45px);
+      align-items: center;
+      justify-items: center;
+      padding: 20px;
+      transform-style: preserve-3d;
+    }
+
+    .letter-slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 135px;
+      height: 135px;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      perspective: 1000px;
+      transform-origin: top left;
+    }
+
+    .letter-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-style: preserve-3d;
+    }
+
+    .letter-slot:hover .letter-wrapper {
+      transform: scale(1.06);
+    }
+
+    .shadow-slot {
+      position: absolute;
+      top: 15px;
+      left: -52px;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 1;
+      transform-style: preserve-3d;
+    }
+
+    .letter-shadow {
+      height: 92px;
+      width: auto;
+      max-width: 105px;
+      object-fit: contain;
+      pointer-events: none;
+      filter: brightness(0);
+      opacity: 0.38;
+      transform-origin: center center;
+      transform: rotateY(24deg) rotateX(6deg);
+      will-change: transform;
+      transition: opacity 0.4s ease;
+    }
+
+    .main-slot {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 2;
+      transform-style: preserve-3d;
+    }
+
+    .token-3d {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d !important;
+      transform-origin: center center;
+      transform: rotateY(24deg) rotateX(6deg);
+      will-change: transform;
+    }
+
+    .layer-slice {
+      position: absolute;
+      height: 125px;
+      width: auto;
+      max-width: 135px;
+      object-fit: contain;
+      pointer-events: none;
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .face-front {
+      transform: translateZ(10px);
+      backface-visibility: hidden;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+
+    .face-back {
+      transform: rotateY(180deg) scaleX(-1) translateZ(10px);
+      backface-visibility: hidden;
+      z-index: 10;
+      opacity: 0.68;
+    }
+
+    .edge-slice {
+      opacity: 1;
+      pointer-events: none;
+      backface-visibility: visible;
+      transition: opacity 0.35s ease;
+    }
+
+    @keyframes cartoon-wiggle-3d {
+      0% {
+        transform: rotateY(28deg) rotateX(8deg) rotateZ(-4deg);
+      }
+
+      50% {
+        transform: rotateY(16deg) rotateX(2deg) rotateZ(4deg);
+      }
+
+      100% {
+        transform: rotateY(28deg) rotateX(8deg) rotateZ(-4deg);
+      }
+    }
+
+    .wiggle {
+      animation: cartoon-wiggle-3d 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes death-spin-3d {
+      0% {
+        transform: rotateY(24deg) rotateX(6deg) scale(1);
+      }
+
+      50% {
+        transform: rotateY(102deg) rotateX(3deg) scale(1.12);
+      }
+
+      100% {
+        transform: rotateY(180deg) rotateX(0deg) rotateZ(0deg) scale(1);
+      }
+    }
+
+    @keyframes revive-spin-3d {
+      0% {
+        transform: rotateY(180deg) rotateX(0deg) rotateZ(0deg) scale(1);
+      }
+
+      50% {
+        transform: rotateY(282deg) rotateX(3deg) scale(1.12);
+      }
+
+      100% {
+        transform: rotateY(384deg) rotateX(6deg) scale(1);
+      }
+    }
+
+    .death-spinning {
+      animation: death-spin-3d 1.5s cubic-bezier(0.76, 0, 0.24, 1) forwards !important;
+    }
+
+    .revive-spinning {
+      animation: revive-spin-3d 0.85s cubic-bezier(0.76, 0, 0.24, 1) forwards !important;
+    }
+
+    .is-dead-state {
+      transform: rotateY(180deg) rotateX(0deg) rotateZ(0deg) !important;
+    }
+
+    .dying-fade .edge-slice,
+    .is-dead-state .edge-slice {
+      opacity: 0 !important;
+      transition: opacity 0.15s ease;
+    }
+
+    .dying-fade .face-front,
+    .is-dead-state .face-front {
+      opacity: 0 !important;
+      transition: opacity 0.15s ease;
+    }
+
+    #blackout {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .grid.eyes-only .edge-slice,
+    .grid.eyes-only .face-back {
+      opacity: 0 !important;
+      transition: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <audio id="lampAudio" src="assets/sound/lamp.mp3" loop preload="auto"></audio>
+  <audio id="horrorAudio" src="assets/sound/horror.mp3" loop preload="auto"></audio>
+  <audio id="pianoAudio" src="assets/sound/piano.mp3" loop preload="auto"></audio>
+
+  <div id="bgLayer"></div>
+
+  <div id="blackout"></div>
+
+  <div id="furnitureLayer"></div>
+
+  <div class="grid-container">
+    <div class="grid" id="letterGrid"></div>
+  </div>
+
+  <script>
+    const bgLayer = document.getElementById('bgLayer');
+    const backgrounds = ['assets/images/background.png', 'assets/images/background-2.png', 'assets/images/background-3.png', 'assets/images/background-4.png'];
+    let currentBgIndex = Math.floor(Math.random() * backgrounds.length);
+    let bgSlices = [];
+
+    function getBgAspect(bgIdx) {
+      return (bgIdx === 0) ? (3288 / 6968) : (3844 / 6968);
+    }
+
+    function getBgTileSrc(bgIdx, tileIndex) {
+      if (bgIdx === 2) {
+        return (Math.abs(tileIndex) % 2 === 1) ? 'assets/images/background-3-door.png' : 'assets/images/background-3.png';
+      }
+      return backgrounds[bgIdx];
+    }
+
+    function setupBackground() {
+      bgLayer.innerHTML = '';
+      bgSlices = [];
+      const aspect = getBgAspect(currentBgIndex);
+      const tileWidth = window.innerHeight * aspect;
+      if (tileWidth <= 0) return;
+      const count = Math.ceil(window.innerWidth / tileWidth) + 3;
+
+      for (let i = 0; i < count; i++) {
+        const img = document.createElement('img');
+        img.className = 'bg-slice';
+        img.alt = '';
+        bgLayer.appendChild(img);
+        bgSlices.push(img);
+      }
+      updateBgSlices();
+    }
+
+    function updateBgSlices() {
+      if (!bgSlices.length) return;
+      const aspect = getBgAspect(currentBgIndex);
+      const tileWidth = window.innerHeight * aspect;
+      if (tileWidth <= 0) return;
+
+      const count = bgSlices.length;
+      const startIdx = Math.floor(bgOffset / tileWidth);
+      const offsetX = bgOffset - startIdx * tileWidth;
+
+      for (let i = 0; i < count; i++) {
+        const tileIdx = startIdx + i;
+        const slice = bgSlices[i];
+        const targetSrc = getBgTileSrc(currentBgIndex, tileIdx);
+
+        if (slice.dataset.tileIndex !== String(tileIdx) || slice.dataset.bgIndex !== String(currentBgIndex)) {
+          slice.src = targetSrc;
+          slice.dataset.tileIndex = String(tileIdx);
+          slice.dataset.bgIndex = String(currentBgIndex);
+        }
+
+        const xPos = i * tileWidth - offsetX;
+        slice.style.transform = `translateX(${xPos}px)`;
+      }
+    }
+
+    function switchBackground() {
+      currentBgIndex = (currentBgIndex + 1) % backgrounds.length;
+      setupBackground();
+      if (typeof updateFurnitureVisibility === 'function') updateFurnitureVisibility();
+    }
+
+    const BG_MAX_SPEED = 140;
+    const BG_ACCEL = 70;
+    let bgScrolling = false;
+    let bgSpeed = 0;
+    let bgOffset = 0;
+    let bgLastTime = null;
+
+    function bgTick(now) {
+      try {
+        if (bgLastTime === null) bgLastTime = now;
+        const dt = Math.min(0.05, (now - bgLastTime) / 1000);
+        bgLastTime = now;
+        const targetSpeed = bgScrolling ? BG_MAX_SPEED : 0;
+        if (bgSpeed < targetSpeed) {
+          bgSpeed = Math.min(targetSpeed, bgSpeed + BG_ACCEL * dt);
+        } else {
+          bgSpeed = Math.max(targetSpeed, bgSpeed - BG_ACCEL * dt);
+        }
+        bgOffset += bgSpeed * dt;
+        if (bgOffset > 1000000) {
+          const aspect = getBgAspect(currentBgIndex);
+          const tileWidth = window.innerHeight * aspect;
+          const cycleWidth = tileWidth * 2;
+          bgOffset = bgOffset % cycleWidth;
+        }
+        updateBgSlices();
+        furnitureTick(dt);
+      } catch (err) {}
+      requestAnimationFrame(bgTick);
+    }
+    requestAnimationFrame(bgTick);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key && e.key.toLowerCase() === 'm') bgScrolling = !bgScrolling;
+      if (e.key && e.key.toLowerCase() === 'l') lineupToggle();
+    });
+
+    let linedUp = false;
+    const lineupAnims = new Map();
+
+    function settleSlots(slots) {
+      slots.forEach((s) => {
+        if (lineupAnims.has(s)) {
+          cancelAnimationFrame(lineupAnims.get(s));
+          lineupAnims.delete(s);
+        }
+        s.style.transition = 'none';
+        s.style.transform = '';
+      });
+      void grid.offsetWidth;
+      slots.forEach((s) => { s.style.transition = ''; });
+    }
+
+    function lineupToggle() {
+      const slots = [...grid.children];
+      if (!slots.length) return;
+
+      slots.forEach((s) => {
+        const w = s.firstElementChild;
+        if (lineupAnims.has(w)) {
+          cancelAnimationFrame(lineupAnims.get(w));
+          lineupAnims.delete(w);
+        }
+        w.style.transition = 'none';
+        w.style.transform = '';
+      });
+      void grid.offsetWidth;
+
+      const before = slots.map((s) => {
+        const sr = s.getBoundingClientRect();
+        const vr = s.firstElementChild.getBoundingClientRect();
+        return { x: vr.left, y: vr.top, k: sr.width > 0 ? vr.width / sr.width : 1, sw: sr.width, sh: sr.height };
+      });
+
+      linedUp = !linedUp;
+      grid.classList.toggle('lineup', linedUp);
+      document.querySelector('.grid-container').classList.toggle('lineup', linedUp);
+
+      requestAnimationFrame(() => {
+        const after = slots.map((s) => s.getBoundingClientRect());
+        const n = slots.length;
+        const cols = Math.min(4, Math.ceil(n / 2));
+        const order = [];
+        for (let c = 0; c < cols; c++) {
+          if (c < n) order.push(c);
+          if (c + 4 < n) order.push(c + 4);
+        }
+        const rank = new Array(n);
+        order.forEach((slotIdx, r) => { rank[slotIdx] = r; });
+        const K_END = linedUp ? 0.72 : 1;
+
+        slots.forEach((s, i) => {
+          const w = s.firstElementChild;
+          const a = after[i];
+          const b = before[i];
+
+          const endX = a.left + a.width * (1 - K_END) / 2;
+          const endY = a.top + a.height * (1 - K_END) / 2;
+          if (Math.abs(b.x - endX) < 1 && Math.abs(b.y - endY) < 1 && Math.abs(b.k - K_END) < 0.01) return;
+
+          const t0 = performance.now() + rank[i] * 190;
+          const dur = 1700;
+          const cx = (b.x + endX) / 2 + (Math.random() - 0.5) * 60;
+          const cy = Math.min(b.y, endY) - 140;
+
+          function frame(now) {
+            let t = (now - t0) / dur;
+            if (t <= 0) {
+              const tx = b.x - a.left - b.sw * (1 - b.k) / 2;
+              const ty = b.y - a.top - b.sh * (1 - b.k) / 2;
+              w.style.transform = `translate(${tx}px, ${ty}px) scale(${b.k})`;
+              lineupAnims.set(w, requestAnimationFrame(frame));
+              return;
+            }
+            t = Math.min(1, t);
+            const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            const mt = 1 - e;
+            const px = mt * mt * b.x + 2 * mt * e * cx + e * e * endX;
+            const py = mt * mt * b.y + 2 * mt * e * cy + e * e * endY;
+            const k = b.k + (K_END - b.k) * e;
+            const tx = px - a.left - a.width * (1 - k) / 2;
+            const ty = py - a.top - a.height * (1 - k) / 2;
+            w.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`;
+            if (t < 1) {
+              lineupAnims.set(w, requestAnimationFrame(frame));
+            } else {
+              w.style.transform = '';
+              w.style.transition = '';
+              lineupAnims.delete(w);
+            }
+          }
+          frame(performance.now());
+        });
+      });
+    }
+
+    const furnitureLayer = document.getElementById('furnitureLayer');
+    const FURNITURE_COUNT = 5;
+    const furnitureItems = [];
+
+    const FURNITURE_CONFIG = {
+      'assets/images/table.png':  { bgs: [3], weight: 0.08, heightPct: 0.30 },
+      'assets/images/chair.png':  { bgs: [3], weight: 0.28, heightPct: 0.30 },
+      'assets/images/box.png':    { bgs: [3], weight: 0.18, heightPct: 0.15 },
+      'assets/images/box-2.png':  { bgs: [3], weight: 0.14, heightPct: 0.15 },
+      'assets/images/box-3.png':  { bgs: [3], weight: 0.14, heightPct: 0.15 },
+    };
+
+    function bgHasFurniture(bgIdx) {
+      return Object.values(FURNITURE_CONFIG).some((c) => c.bgs.includes(bgIdx));
+    }
+
+    function pickFurnitureType() {
+      const allowed = Object.entries(FURNITURE_CONFIG).filter(([, c]) => c.bgs.includes(currentBgIndex));
+      if (!allowed.length) return null;
+      const total = allowed.reduce((sum, [, c]) => sum + c.weight, 0);
+      let r = Math.random() * total;
+      for (const [type, c] of allowed) {
+        r -= c.weight;
+        if (r <= 0) return type;
+      }
+      return null;
+    }
+
+    const FURNITURE_MIN_GAP = window.innerWidth * 0.28;
+
+    function furnitureTooClose(x) {
+      return furnitureItems.some((it) => it.type && Math.abs(it.x - x) < FURNITURE_MIN_GAP);
+    }
+
+    function spawnFurniture(item, offscreenRight) {
+      item.type = pickFurnitureType();
+      if (offscreenRight) {
+        let tries = 0;
+        do {
+          item.x = window.innerWidth + 100 + Math.random() * window.innerWidth * 2;
+          tries++;
+        } while (furnitureTooClose(item.x) && tries < 20);
+      } else {
+        item.x = Math.random() * window.innerWidth * 2.2;
+      }
+      item.flip = Math.random() < 0.5;
+      item.bottomPx = 0;
+      const cfg = FURNITURE_CONFIG[item.type] || { heightPct: 0.15 };
+      item.el.src = item.type || furnitureItems[0].el.src;
+      item.el.style.visibility = item.type ? 'visible' : 'hidden';
+      item.el.style.height = `${Math.round(window.innerHeight * cfg.heightPct)}px`;
+    }
+
+    function applyFurniturePose(item) {
+      const el = item.el;
+      el.style.bottom = `${Math.round(item.bottomPx || 0)}px`;
+      return `translateX(${Math.round(item.x)}px) scaleX(${item.flip ? -1 : 1})`;
+    }
+
+    for (let i = 0; i < FURNITURE_COUNT; i++) {
+      const el = document.createElement('img');
+      el.className = 'furniture';
+      el.alt = '';
+      furnitureLayer.appendChild(el);
+      const item = { el, x: 0, scale: 1, type: null };
+      furnitureItems.push(item);
+      spawnFurniture(item, false);
+    }
+    furnitureItems.forEach((item, i) => {
+      item.x = (i / FURNITURE_COUNT) * window.innerWidth * 1.5 + Math.random() * (window.innerWidth / FURNITURE_COUNT) * 0.4;
+    });
+    updateFurnitureVisibility();
+
+    function updateFurnitureVisibility() {
+      furnitureLayer.style.display = bgHasFurniture(currentBgIndex) ? 'block' : 'none';
+    }
+
+    function activateSlot(item, x, type, flip, bottomPx) {
+      const cfg = FURNITURE_CONFIG[type] || { heightPct: 0.15 };
+      item.type = type;
+      item.flip = flip;
+      item.bottomPx = bottomPx || 0;
+      item.x = x;
+      item.el.src = type;
+      item.el.style.visibility = 'visible';
+      item.el.style.height = `${Math.round(window.innerHeight * cfg.heightPct)}px`;
+    }
+
+    function findHidden() {
+      return furnitureItems.find((it) => !it.type);
+    }
+
+    function pickBoxType() {
+      const r = Math.random();
+      if (r < 0.34) return 'assets/images/box.png';
+      if (r < 0.67) return 'assets/images/box-2.png';
+      return 'assets/images/box-3.png';
+    }
+
+    function spawnCluster(offscreenRight) {
+      const roll = Math.random();
+
+      if (roll < 0.3 && offscreenRight) {
+        const boxes = Math.min(2 + Math.floor(Math.random() * 2), furnitureItems.filter((it) => !it.type).length);
+        if (boxes < 1) return;
+        let x = window.innerWidth + 100 + Math.random() * window.innerWidth;
+        let tries = 0;
+        while (furnitureTooClose(x) && tries < 20) {
+          x = window.innerWidth + 100 + Math.random() * window.innerWidth;
+          tries++;
+        }
+        const flip = Math.random() < 0.5;
+        const h = window.innerHeight * FURNITURE_CONFIG['assets/images/box.png'].heightPct;
+        let bottom = 0;
+        for (let i = 0; i < boxes; i++) {
+          const slot = findHidden();
+          if (!slot) break;
+          activateSlot(slot, x, pickBoxType(), flip, bottom);
+          bottom += h + 6 + Math.random() * 14;
+        }
+        return;
+      }
+
+      if (roll < 0.6 && offscreenRight) {
+        const visible = furnitureItems.filter((it) => it.type);
+        if (!visible.length) return;
+        const anchor = visible[Math.floor(Math.random() * visible.length)];
+        const slot = findHidden();
+        if (!slot) return;
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const x = anchor.x + dir * (90 + Math.random() * 130);
+        let type = pickFurnitureType();
+        if (!type) type = pickBoxType();
+        activateSlot(slot, x, type, Math.random() < 0.5, 0);
+        return;
+      }
+
+      const slot = findHidden();
+      if (!slot) return;
+      spawnFurniture(slot, true);
+    }
+
+    let furnitureSpawnTimer = 2;
+
+    function furnitureTick(dt) {
+      if (!bgHasFurniture(currentBgIndex)) return;
+      if (bgScrolling) {
+        furnitureSpawnTimer -= dt;
+        if (furnitureSpawnTimer <= 0) {
+          furnitureSpawnTimer = 1.5 + Math.random() * 2.5;
+          spawnCluster(true);
+        }
+      }
+      for (const item of furnitureItems) {
+        if (!item.type) continue;
+        item.x -= bgSpeed * dt;
+        const w = item.el.getBoundingClientRect().width || 150;
+        if (item.x < -w) {
+          item.type = null;
+          item.el.style.visibility = 'hidden';
+        }
+        item.el.style.transform = applyFurniturePose(item);
+      }
+    }
+
+    const blackout = document.getElementById('blackout');
+    let currentEyeTokens = [];
+    let transitioning = false;
+
+    function bakeEyesTexture(imgElement) {
+      if (!imgElement || imgElement.naturalWidth === 0) return '';
+      try {
+        const nw = imgElement.naturalWidth || 260;
+        const nh = imgElement.naturalHeight || 260;
+        const maxDim = 260;
+        let targetW, targetH;
+        if (nw > nh) {
+          targetW = maxDim;
+          targetH = Math.round((nh / nw) * maxDim);
+        } else {
+          targetH = maxDim;
+          targetW = Math.round((nw / nh) * maxDim);
+        }
+        const pad = 16;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW + pad * 2;
+        canvas.height = targetH + pad * 2;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgElement, pad, pad, targetW, targetH);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 100 && data[i] > 195 && data[i + 1] > 195 && data[i + 2] > 195) {
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+            data[i + 3] = 255;
+          } else {
+            data[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/png');
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function freezeToZero(el) {
+      const computed = getComputedStyle(el).transform;
+      const pose = (computed && computed !== 'none') ? computed : '';
+      const anims = el.getAnimations();
+      const wAnim = anims.find((a) => a.animationName === 'cartoon-wiggle-3d') || anims[0];
+      el.style.transition = 'none';
+      el.style.transform = pose;
+      el.classList.remove('wiggle', 'revive-spinning', 'death-spinning', 'is-dead-state');
+      el.style.animationPlayState = '';
+      void el.offsetWidth;
+      el.style.transition = 'transform 1s ease';
+      el.style.transform = 'rotateY(0deg) rotateX(0deg)';
+      return { pose, time: wAnim ? wAnim.currentTime : null };
+    }
+
+    function resumeFrom(el, saved) {
+      el.style.transition = 'transform 0.4s ease';
+      el.style.transform = saved.pose || '';
+    }
+
+    function enableWiggle(el, saved) {
+      el.style.transition = 'none';
+      el.style.transform = '';
+      el.classList.add('wiggle');
+      const anims = el.getAnimations();
+      const wAnim = anims.find((a) => a.animationName === 'cartoon-wiggle-3d') || anims[0];
+      if (wAnim && saved.time != null) {
+        try { wAnim.currentTime = saved.time; } catch (err) {}
+      }
+      void el.offsetWidth;
+      el.style.transition = '';
+    }
+
+    function transitionRoom() {
+      if (transitioning) return;
+      transitioning = true;
+
+      if (pianoAudio) {
+        pianoMuted = true;
+        fadeAudio(pianoAudio, 0, 1200);
+      }
+
+      const frozen = [];
+      currentEyeTokens.forEach((t) => {
+        if (t.isAlive && t.isAlive()) {
+          const saved3D = freezeToZero(t.token3D);
+          const savedShadow = freezeToZero(t.shadowImg);
+          frozen.push({ t, saved3D, savedShadow });
+        }
+      });
+
+      setTimeout(() => {
+        const build = new Audio('assets/sound/build.mp3');
+        build.play().catch(() => {});
+      }, 200);
+
+      const CUT_MS = 2000;
+      const LIGHT_SOUND_OFFSET_MS = 150;
+
+      setTimeout(() => {
+        const lightIn = new Audio('assets/sound/light.mp3');
+        lightIn.play().catch(() => {});
+      }, CUT_MS + LIGHT_SOUND_OFFSET_MS);
+
+      setTimeout(() => {
+        blackout.style.opacity = '1';
+        switchBackground();
+        currentEyeTokens.forEach((t) => {
+          if (t.isAlive && t.isAlive()) {
+            const eyeTexture = bakeEyesTexture(assetCache[`alive_${t.letter}`]);
+            if (eyeTexture) {
+              t.frontImg.src = eyeTexture;
+            } else {
+              t.frontImg.style.transition = 'none';
+              t.frontImg.style.opacity = '0';
+            }
+          }
+        });
+        grid.classList.add('eyes-only');
+
+        setTimeout(() => {
+          blackout.style.opacity = '0';
+          grid.classList.remove('eyes-only');
+          currentEyeTokens.forEach((t) => {
+            t.frontImg.src = t.frontTexture;
+            t.frontImg.style.transition = '';
+            t.frontImg.style.opacity = '';
+          });
+          const lightOut = new Audio('assets/sound/light.mp3');
+          lightOut.play().catch(() => {});
+          const slam = new Audio('assets/sound/slam.mp3');
+          slam.volume = 0.9;
+          slam.play().catch(() => {});
+          if (pianoAudio) {
+            pianoMuted = false;
+            pianoAudio.play().catch(() => {});
+            fadeAudio(pianoAudio, PIANO_TARGET, 2500);
+          }
+
+          setTimeout(() => {
+            frozen.forEach(({ t, saved3D, savedShadow }) => {
+              resumeFrom(t.token3D, saved3D);
+              resumeFrom(t.shadowImg, savedShadow);
+            });
+            setTimeout(() => {
+              frozen.forEach(({ t, saved3D, savedShadow }) => {
+                enableWiggle(t.token3D, saved3D);
+                enableWiggle(t.shadowImg, savedShadow);
+              });
+              transitioning = false;
+            }, 450);
+          }, 1000);
+        }, 2500);
+      }, CUT_MS);
+    }
+
+    window.addEventListener('resize', setupBackground);
+    setupBackground();
+    [...backgrounds, 'assets/images/background-3-door.png'].forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const grid = document.getElementById('letterGrid');
+    const TOTAL_LETTERS = 8;
+
+    const assetCache = {};
+
+    function bakeTexture(imgElement, filterString, padding = 16, maxDim = 260) {
+      if (!imgElement || imgElement.naturalWidth === 0) {
+        return imgElement ? imgElement.src : '';
+      }
+      try {
+        const nw = imgElement.naturalWidth || 260;
+        const nh = imgElement.naturalHeight || 260;
+        let targetW, targetH;
+
+        if (nw > nh) {
+          targetW = maxDim;
+          targetH = Math.round((nh / nw) * maxDim);
+        } else {
+          targetH = maxDim;
+          targetW = Math.round((nw / nh) * maxDim);
+        }
+
+        const pad = padding;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW + pad * 2;
+        canvas.height = targetH + pad * 2;
+        const ctx = canvas.getContext('2d');
+        ctx.filter = filterString;
+        ctx.drawImage(imgElement, pad, pad, targetW, targetH);
+        return canvas.toDataURL('image/png');
+      } catch (err) {
+        return imgElement.src;
+      }
+    }
+
+    function bakeBlinkTexture(imgElement, filterString, padding = 16) {
+      if (!imgElement || imgElement.naturalWidth === 0) {
+        return imgElement ? imgElement.src : '';
+      }
+      try {
+        const nw = imgElement.naturalWidth || 260;
+        const nh = imgElement.naturalHeight || 260;
+        const maxDim = 260;
+        let targetW, targetH;
+
+        if (nw > nh) {
+          targetW = maxDim;
+          targetH = Math.round((nh / nw) * maxDim);
+        } else {
+          targetH = maxDim;
+          targetW = Math.round((nw / nh) * maxDim);
+        }
+
+        const pad = padding;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW + pad * 2;
+        canvas.height = targetH + pad * 2;
+        const ctx = canvas.getContext('2d');
+        ctx.filter = filterString;
+        ctx.drawImage(imgElement, pad, pad, targetW, targetH);
+
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 100 && data[i] > 195 && data[i + 1] > 195 && data[i + 2] > 195) {
+            data[i] = 18;
+            data[i + 1] = 18;
+            data[i + 2] = 22;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/png');
+      } catch (err) {
+        return imgElement.src;
+      }
+    }
+
+    function getRandomLetters(count) {
+      const shuffled = [...alphabet].sort(() => 0.5 - Math.random());
+      return shuffled.slice(0, count);
+    }
+
+    function bakeEyesTexture(imgElement) {
+      if (!imgElement || imgElement.naturalWidth === 0) return '';
+      try {
+        const nw = imgElement.naturalWidth || 260;
+        const nh = imgElement.naturalHeight || 260;
+        const maxDim = 260;
+        let targetW, targetH;
+        if (nw > nh) {
+          targetW = maxDim;
+          targetH = Math.round((nh / nw) * maxDim);
+        } else {
+          targetH = maxDim;
+          targetW = Math.round((nw / nh) * maxDim);
+        }
+        const pad = 16;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW + pad * 2;
+        canvas.height = targetH + pad * 2;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgElement, pad, pad, targetW, targetH);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 100 && data[i] > 195 && data[i + 1] > 195 && data[i + 2] > 195) {
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+            data[i + 3] = 255;
+          } else {
+            data[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/png');
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function playEchoBell() {
+      const bell1 = new Audio('assets/sound/bell.mp3');
+      bell1.volume = 1.0;
+      bell1.play().catch(() => {});
+
+      setTimeout(() => {
+        const bell2 = new Audio('assets/sound/bell.mp3');
+        bell2.volume = 0.36;
+        bell2.play().catch(() => {});
+      }, 180);
+
+      setTimeout(() => {
+        const bell3 = new Audio('assets/sound/bell.mp3');
+        bell3.volume = 0.12;
+        bell3.play().catch(() => {});
+      }, 360);
+    }
+
+    let groupBlinkTimeout = null;
+
+    function renderLetters() {
+      grid.innerHTML = '';
+      const letters = getRandomLetters(TOTAL_LETTERS);
+      const activeAliveLetters = [];
+
+      letters.forEach((letter) => {
+        let isDead = false;
+        const randomHue = Math.floor(Math.random() * 360);
+
+        const slot = document.createElement('div');
+        slot.className = 'letter-slot';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'letter-wrapper';
+
+        const duration = (2.6 + Math.random() * 0.8).toFixed(2);
+        const delay = (-(Math.random() * 3.0)).toFixed(2);
+
+        const shadowSlot = document.createElement('div');
+        shadowSlot.className = 'shadow-slot';
+
+        const shadowImg = document.createElement('img');
+        shadowImg.src = `assets/images/letters/${letter}.png`;
+        shadowImg.alt = '';
+        shadowImg.className = 'letter-shadow wiggle';
+        shadowImg.style.animationDuration = `${duration}s`;
+        shadowImg.style.animationDelay = `${delay}s`;
+        shadowSlot.appendChild(shadowImg);
+
+        const mainSlot = document.createElement('div');
+        mainSlot.className = 'main-slot';
+
+        const token3D = document.createElement('div');
+        token3D.className = 'token-3d wiggle';
+        token3D.style.animationDuration = `${duration}s`;
+        token3D.style.animationDelay = `${delay}s`;
+
+        const aliveAsset = assetCache[`alive_${letter}`] || new Image();
+        const deadAsset = assetCache[`dead_${letter}`] || new Image();
+
+        const frontTexture = bakeTexture(aliveAsset, `saturate(0.82) brightness(1.14) hue-rotate(${randomHue}deg)`, 16);
+        const blinkTexture = bakeBlinkTexture(aliveAsset, `saturate(0.82) brightness(1.14) hue-rotate(${randomHue}deg)`, 16);
+        const edgeTexture = bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px #652224) brightness(0.72) contrast(1.12) saturate(0.85) hue-rotate(${randomHue}deg)`, 16);
+        const deadTexture = bakeTexture(deadAsset, `drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28) hue-rotate(${randomHue}deg)`, 64, 600);
+
+        for (let z = -9.5; z <= 9.5; z += 0.75) {
+          const slice = document.createElement('img');
+          slice.src = edgeTexture;
+          slice.alt = '';
+          slice.className = 'layer-slice edge-slice';
+          slice.style.transform = `translateZ(${z.toFixed(1)}px)`;
+          token3D.appendChild(slice);
+        }
+
+        const frontImg = document.createElement('img');
+        frontImg.src = frontTexture;
+        frontImg.alt = letter;
+        frontImg.className = 'layer-slice face-front';
+        token3D.appendChild(frontImg);
+
+        const backImg = document.createElement('img');
+        backImg.src = deadTexture;
+        backImg.alt = `${letter} Dead`;
+        backImg.className = 'layer-slice face-back';
+        token3D.appendChild(backImg);
+
+        mainSlot.appendChild(token3D);
+        wrapper.appendChild(shadowSlot);
+        wrapper.appendChild(mainSlot);
+        slot.appendChild(wrapper);
+        grid.appendChild(slot);
+
+        const isAlive = () => !isDead && !isFlipping;
+        activeAliveLetters.push({
+          frontImg,
+          frontTexture,
+          blinkTexture,
+          isAlive
+        });
+        currentEyeTokens.push({ token3D, shadowImg, frontImg, frontTexture, letter, isAlive });
+
+        let isFlipping = false;
+        slot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (isFlipping) return;
+          isFlipping = true;
+
+          if (!isDead) {
+            frontImg.src = frontTexture;
+            setTimeout(() => {
+              const whoosh = new Audio('assets/sound/whoosh.mp3');
+              whoosh.play().catch(() => {});
+            }, 200);
+
+            token3D.classList.remove('wiggle', 'revive-spinning');
+            token3D.classList.add('death-spinning');
+
+            shadowImg.classList.remove('wiggle', 'revive-spinning');
+            shadowImg.classList.add('death-spinning');
+            shadowImg.style.opacity = '0.18';
+
+            setTimeout(() => {
+              const ghost = new Audio('assets/sound/ghost.mp3');
+              ghost.volume = 0.28;
+              ghost.play().catch(() => {});
+            }, 750);
+
+            setTimeout(() => {
+              token3D.classList.add('dying-fade');
+              shadowImg.src = `assets/images/letters-dead/${letter}.png`;
+            }, 900);
+
+            setTimeout(() => {
+              playEchoBell();
+            }, 1500);
+
+            setTimeout(() => {
+              token3D.classList.remove('death-spinning', 'dying-fade');
+              token3D.classList.add('is-dead-state');
+
+              shadowImg.classList.remove('death-spinning');
+              shadowImg.classList.add('is-dead-state');
+
+              isDead = true;
+              isFlipping = false;
+            }, 1500);
+          } else {
+            token3D.classList.remove('is-dead-state', 'dying-fade', 'death-spinning');
+            token3D.classList.add('revive-spinning');
+
+            shadowImg.classList.remove('is-dead-state', 'death-spinning');
+            shadowImg.classList.add('revive-spinning');
+
+            setTimeout(() => {
+              shadowImg.src = `assets/images/letters/${letter}.png`;
+              shadowImg.style.opacity = '0.38';
+            }, 425);
+
+            setTimeout(() => {
+              token3D.classList.remove('revive-spinning');
+              token3D.classList.add('wiggle');
+
+              shadowImg.classList.remove('revive-spinning');
+              shadowImg.classList.add('wiggle');
+
+              isDead = false;
+              isFlipping = false;
+            }, 850);
+          }
+        });
+      });
+
+      function startGroupBlinkDirector() {
+        if (groupBlinkTimeout) clearTimeout(groupBlinkTimeout);
+        function nextTick() {
+          const delay = 1100 + Math.random() * 1600;
+          groupBlinkTimeout = setTimeout(() => {
+            if (transitioning) {
+              nextTick();
+              return;
+            }
+            const available = activeAliveLetters.filter((item) => item.isAlive());
+            if (available.length > 0) {
+              const count = Math.random() < 0.25 ? Math.min(2, available.length) : 1;
+              const shuffled = [...available].sort(() => 0.5 - Math.random());
+              for (let i = 0; i < count; i++) {
+                const chosen = shuffled[i];
+                setTimeout(() => {
+                  if (!chosen.isAlive()) return;
+                  chosen.frontImg.src = chosen.blinkTexture;
+                  setTimeout(() => {
+                    chosen.frontImg.src = chosen.frontTexture;
+                    if (Math.random() < 0.28) {
+                      setTimeout(() => {
+                        if (chosen.isAlive()) {
+                          chosen.frontImg.src = chosen.blinkTexture;
+                          setTimeout(() => {
+                            chosen.frontImg.src = chosen.frontTexture;
+                          }, 110);
+                        }
+                      }, 70);
+                    }
+                  }, 130);
+                }, i * 180);
+              }
+            }
+            nextTick();
+          }, delay);
+        }
+        nextTick();
+      }
+      startGroupBlinkDirector();
+    }
+
+    const lampAudio = document.getElementById('lampAudio');
+    const horrorAudio = document.getElementById('horrorAudio');
+    const pianoAudio = document.getElementById('pianoAudio');
+    let audioCtx = null;
+    let pianoStarted = false;
+    let pianoMuted = false;
+    const PIANO_TARGET = 0.5;
+    let pianoFadeRAF = null;
+
+    function fadeAudio(el, target, duration) {
+      if (pianoFadeRAF) cancelAnimationFrame(pianoFadeRAF);
+      const start = parseFloat(el.volume) || 0;
+      const startTime = performance.now();
+      function step(now) {
+        const t = Math.max(0, Math.min(1, (now - startTime) / duration));
+        el.volume = Math.max(0, Math.min(1, start + (target - start) * t));
+        if (t < 1) pianoFadeRAF = requestAnimationFrame(step);
+        else pianoFadeRAF = null;
+      }
+      pianoFadeRAF = requestAnimationFrame(step);
+    }
+
+    function initPiano() {
+      if (pianoStarted || !pianoAudio) return;
+      pianoStarted = true;
+      pianoAudio.volume = 0;
+      pianoAudio.play().then(() => {
+        if (!pianoMuted) fadeAudio(pianoAudio, PIANO_TARGET, 3500);
+      }).catch(() => {
+        pianoStarted = false;
+      });
+    }
+
+    function startAudio() {
+      lampAudio.playbackRate = 0.88;
+      if (!audioCtx) {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContext();
+          const source = audioCtx.createMediaElementSource(lampAudio);
+          const gainNode = audioCtx.createGain();
+          gainNode.gain.value = 1.65;
+          source.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+        } catch (e) {}
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      if (lampAudio && lampAudio.paused) {
+        lampAudio.play().catch(() => {});
+      }
+      if (horrorAudio && horrorAudio.paused) {
+        horrorAudio.volume = 0.85;
+        horrorAudio.play().catch(() => {});
+      }
+      scheduleRandomWind();
+      scheduleRandomGhost();
+    }
+
+    let windScheduled = false;
+    function scheduleRandomWind() {
+      if (windScheduled) return;
+      windScheduled = true;
+      function triggerWind() {
+        const delay = 8000 + Math.random() * 18000;
+        setTimeout(() => {
+          const wind = new Audio('assets/sound/wind.mp3');
+          wind.volume = 0.35 + Math.random() * 0.45;
+          wind.playbackRate = 0.88 + Math.random() * 0.25;
+          wind.play().catch(() => {});
+          triggerWind();
+        }, delay);
+      }
+      triggerWind();
+    }
+
+    let ghostScheduled = false;
+    function scheduleRandomGhost() {
+      if (ghostScheduled) return;
+      ghostScheduled = true;
+      function triggerGhost() {
+        const delay = 12000 + Math.random() * 24000;
+        setTimeout(() => {
+          const ghost = new Audio('assets/sound/ghost.mp3');
+          ghost.volume = 0.35 + Math.random() * 0.4;
+          ghost.playbackRate = 0.9 + Math.random() * 0.2;
+          ghost.play().catch(() => {});
+          triggerGhost();
+        }, delay);
+      }
+      triggerGhost();
+    }
+
+    startAudio();
+
+    ['click', 'keydown', 'touchstart', 'pointerdown'].forEach((evt) => {
+      window.addEventListener(evt, startAudio, { passive: true });
+      window.addEventListener(evt, initPiano, { passive: true });
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        transitionRoom();
+      }
+    });
+
+    async function init() {
+      const promises = [];
+      alphabet.forEach((char) => {
+        const alive = new Image();
+        alive.src = `assets/images/letters/${char}.png`;
+        assetCache[`alive_${char}`] = alive;
+        if (alive.decode) {
+          promises.push(alive.decode().catch(() => {}));
+        }
+
+        const dead = new Image();
+        dead.src = `assets/images/letters-dead/${char}.png`;
+        assetCache[`dead_${char}`] = dead;
+        if (dead.decode) {
+          promises.push(dead.decode().catch(() => {}));
+        }
+      });
+
+      await Promise.all(promises);
+      renderLetters();
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

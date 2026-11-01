@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wiggle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <!-- Ambient & Loop Audio -->
+  <audio id="lampAudio" src="assets/sound/lamp.mp3" loop preload="auto"></audio>
+  <audio id="horrorAudio" src="assets/sound/horror.mp3" loop preload="auto"></audio>
+  <audio id="musicAudio" src="assets/sound/lobby.mp3" loop preload="auto"></audio>
+  <audio id="pianoAudio" src="assets/sound/lobby.mp3" loop preload="auto"></audio>
+
+  <!-- Environment & Background Layers -->
+  <div id="bgLayer"></div>
+  <canvas id="staticNoiseCanvas" class="static-noise"></canvas>
+  <div id="blackout"></div>
+  <div id="furnitureLayer"></div>
+
+  <!-- Character Token Stage -->
+  <div class="grid-container">
+    <div class="grid lobby" id="letterGrid"></div>
+  </div>
+
+  <!-- Lobby UI Overlay -->
+  <div id="lobbyUI" class="lobby-ui">
+    <!-- Top-Left Back Button -->
+    <button class="lobby-back-btn" id="lobbyBackBtn">
+      <span class="btn-circle"></span> Back
+    </button>
+
+    <!-- Join Banner (Top-Left Angle) -->
+    <div class="lobby-join-banner">
+      <span class="banner-sub">Join in at</span>
+      <h1 class="banner-main" id="lobbyJoinUrl">BARCODEGAMES.FUN</h1>
+    </div>
+
+    <!-- Room Code Badge (Bottom-Right Angle) -->
+    <div class="lobby-code-badge">
+      <span class="code-label">Room code</span>
+      <div class="code-value" id="lobbyRoomCode">CUNT</div>
+    </div>
+
+    <!-- Footer Start Prompt -->
+    <div class="lobby-start-prompt" id="lobbyStartPrompt">
+      Press <span class="highlight">EVERYBODY'S IN</span> to start
+    </div>
+  </div>
+
+  <!-- Fullscreen Atmosphere Filters for Lobby -->
+  <div id="lobbyAtmosphere" class="lobby-atmosphere">
+    <img src="assets/images/web-2.png" class="corner-web web-left" alt="" />
+    <img src="assets/images/web.png" class="corner-web web-right" alt="" />
+    <div class="lobby-linear-gradient"></div>
+    <div class="lobby-vignette"></div>
+  </div>
+
+  <!-- Ambient Light Filter & Flickering Overlay -->
+  <div id="lightingOverlay"></div>
+
+  <!-- Curtains Transition Layer -->
+  <div id="curtainsContainer" class="curtains-container hidden">
+    <div class="curtain-panel curtain-left"></div>
+    <div class="curtain-panel curtain-right"></div>
+    <div class="curtains-vignette"></div>
+  </div>
+
+  <!-- Intro Sequence Overlay -->
+  <div id="introOverlay" class="intro-overlay">
+    <canvas id="introNoiseCanvas" class="intro-noise-canvas"></canvas>
+    <div id="introLogo" class="intro-logo" aria-label="DYING TO KNOW"></div>
+    <button id="skipIntroBtn" class="skip-intro-btn hidden">Skip Intro [Esc]</button>
+  </div>
+
+  <!-- Question & Answers Stage Overlay -->
+  <div id="questionStage" class="question-stage hidden">
+    <!-- Left: Question Text -->
+    <div class="question-box">
+      <h2 class="question-text" id="questionText">What's the proper term for the<br>Northern Lights?</h2>
+    </div>
+
+    <!-- Right: Answers List -->
+    <div class="answers-list" id="answersList">
+      <div class="answer-item">
+        <span class="answer-num">1</span>
+        <span class="answer-text">faculae</span>
+      </div>
+      <div class="answer-item">
+        <span class="answer-num">2</span>
+        <span class="answer-text">Doppler Effect</span>
+      </div>
+      <div class="answer-item">
+        <span class="answer-num">3</span>
+        <span class="answer-text">aurora borealis</span>
+      </div>
+      <div class="answer-item">
+        <span class="answer-num">4</span>
+        <span class="answer-text">Cassiopeia</span>
+      </div>
+    </div>
+
+    <!-- Bottom Left: 15s Countdown Timer (Clean Circle) -->
+    <div id="questionTimer" class="question-timer">
+      <div class="circle-timer">
+        <div class="watch-pie" id="watchPie"></div>
+        <span class="timer-digits" id="timerDigits">15</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script src="js/sound.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/manager.js"></script>
+  <script src="js/main.js"></script>
+</body>
+
+</html>

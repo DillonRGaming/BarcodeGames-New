@@ -1,0 +1,1032 @@
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: #121212;
+  font-family: "Special Elite", cursive, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  position: relative;
+}
+
+/* =========================================
+   Environment & Background Layers
+   ========================================= */
+
+#bgLayer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-slice {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: auto;
+  user-select: none;
+  pointer-events: none;
+  will-change: transform;
+  display: block;
+}
+
+#furnitureLayer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  display: none;
+}
+
+.furniture {
+  position: absolute;
+  user-select: none;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.static-noise {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  z-index: 2;
+  image-rendering: pixelated;
+}
+
+#blackout {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.15s ease;
+}
+
+#lightingOverlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0.88) 100%);
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0.25;
+  will-change: opacity;
+  transition: opacity 0.05s ease;
+}
+
+/* =========================================
+   Grid & Layout Container
+   ========================================= */
+
+.grid-container {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.grid-container.lineup {
+  align-items: flex-start;
+  padding-top: clamp(24px, 3.8vh, 44px);
+}
+
+.grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 1. Grid Mode (Classic 2x4 Layout) */
+.grid.grid-layout {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  grid-template-rows: repeat(2, auto);
+  column-gap: clamp(30px, 4.5vw, 65px);
+  row-gap: clamp(20px, 3.5vh, 45px);
+  align-items: center;
+  justify-items: center;
+  padding: 20px;
+  width: auto;
+  height: auto;
+}
+
+/* 2. Lineup Mode (Top Row) */
+.grid.lineup {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(2px, 0.6vw, 10px);
+  width: auto;
+  height: auto;
+}
+
+.grid.lineup .letter-slot {
+  width: 125px;
+  height: 125px;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+.grid.lineup .player-name {
+  font-size: clamp(15px, 1.25vw, 19px);
+  bottom: calc(100% + 6px);
+  opacity: 1;
+}
+
+.player-result-badge {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  font-family: "Special Elite", sans-serif;
+  font-size: clamp(16px, 1.5vw, 24px);
+  font-weight: bold;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.28s ease;
+  opacity: 0;
+  z-index: 15;
+}
+
+.player-result-badge.visible {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+}
+
+.player-result-badge.correct {
+  color: #4ade80;
+  text-shadow: none;
+  filter: none;
+}
+
+.grid.lobby .letter-slot {
+  position: absolute;
+}
+
+.grid.lobby .letter-slot:nth-child(1) {
+  left: 13.5vw;
+  top: 19vh;
+}
+
+.grid.lobby .letter-slot:nth-child(2) {
+  left: 20vw;
+  top: 46vh;
+}
+
+.grid.lobby .letter-slot:nth-child(3) {
+  left: 6.5vw;
+  top: 60vh;
+}
+
+.grid.lobby .letter-slot:nth-child(4) {
+  left: 41.5vw;
+  top: 62vh;
+}
+
+.grid.lobby .letter-slot:nth-child(5) {
+  left: 56vw;
+  top: 27vh;
+}
+
+.grid.lobby .letter-slot:nth-child(6) {
+  left: 70.5vw;
+  top: 37vh;
+}
+
+.grid.lobby .letter-slot:nth-child(7) {
+  left: 77.5vw;
+  top: 14vh;
+}
+
+.grid.lobby .letter-slot:nth-child(8) {
+  left: 82.5vw;
+  top: 62vh;
+}
+
+/* =========================================
+   Character Token & Nameplate Structure
+   ========================================= */
+
+.letter-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 125px;
+  height: 125px;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  pointer-events: auto;
+  transition: opacity 0.35s ease;
+}
+
+.letter-slot.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.2) rotate(15deg);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.player-name {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) rotate(var(--name-rot, -4deg));
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(15px, 1.25vw, 19px);
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 2px 2px 0 #000000, 3px 3px 6px rgba(0, 0, 0, 0.95);
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.35s ease;
+  z-index: 10;
+}
+
+.vip-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(16px, 1.4vw, 24px);
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 2px #000000, 2px 2px 4px rgba(0, 0, 0, 0.8);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.65));
+  pointer-events: none;
+  z-index: 50;
+  user-select: none;
+  backface-visibility: hidden;
+}
+
+.vip-badge.vip-front {
+  transform: translate(-50%, -50%) translateZ(11px);
+}
+
+.vip-badge.vip-back {
+  transform: translate(-50%, -50%) rotateY(180deg) translateZ(11px);
+  opacity: 0.68;
+}
+
+/* =========================================
+   Lobby UI & Atmosphere Overlay Components
+   ========================================= */
+
+.lobby-atmosphere {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  transition: opacity 0.4s ease;
+}
+
+.lobby-atmosphere.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Spiderwebs (Topmost Atmosphere Layer) */
+.corner-web {
+  position: fixed;
+  opacity: 0.20;
+  pointer-events: none;
+  user-select: none;
+  z-index: 30;
+}
+
+/* web-2.png in top-left */
+.corner-web.web-left {
+  top: -7vh;
+  left: -5vw;
+  width: clamp(240px, 25vw, 460px);
+  height: auto;
+  transform-origin: top left;
+}
+
+/* web.png in top-right (way more right and up) */
+.corner-web.web-right {
+  top: -4vh;
+  right: -5vw;
+  width: clamp(360px, 38vw, 680px);
+  height: auto;
+  transform-origin: top right;
+}
+
+/* 1. Ultra-Smooth Low-Opacity Vertical Stage Gradient */
+.lobby-linear-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.30) 10%,
+      rgba(0, 0, 0, 0.18) 20%,
+      rgba(0, 0, 0, 0.08) 32%,
+      rgba(0, 0, 0, 0.02) 42%,
+      rgba(0, 0, 0, 0) 50%,
+      rgba(0, 0, 0, 0.02) 58%,
+      rgba(0, 0, 0, 0.08) 68%,
+      rgba(0, 0, 0, 0.18) 80%,
+      rgba(0, 0, 0, 0.32) 90%,
+      rgba(0, 0, 0, 0.46) 100%);
+  pointer-events: none;
+}
+
+/* 2. Fullscreen Smooth Vignette */
+.lobby-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%,
+      rgba(0, 0, 0, 0) 35%,
+      rgba(0, 0, 0, 0.15) 60%,
+      rgba(0, 0, 0, 0.35) 82%,
+      rgba(0, 0, 0, 0.65) 100%);
+  pointer-events: none;
+}
+
+.lobby-ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  transition: opacity 0.4s ease;
+}
+
+.lobby-ui.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 1. Back Button */
+.lobby-back-btn {
+  position: absolute;
+  top: 3vh;
+  left: 3.5vw;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(16px, 1.3vw, 20px);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s ease, transform 0.2s ease;
+  filter: drop-shadow(-25px 8px 0px rgba(0, 0, 0, 0.38));
+}
+
+.lobby-back-btn:hover {
+  color: #fff;
+  transform: scale(1.04);
+}
+
+.btn-circle {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+}
+
+/* 2. Join Banner */
+.lobby-join-banner {
+  position: absolute;
+  top: 13vh;
+  left: 31.5vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: rotate(-7deg);
+  user-select: none;
+  pointer-events: none;
+}
+
+.lobby-join-banner .banner-sub {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(15px, 1.3vw, 21px);
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.5px;
+  text-shadow: -25px 8px 0px rgba(0, 0, 0, 0.38), 0 2px 4px rgba(0, 0, 0, 0.85);
+}
+
+.lobby-join-banner .banner-sub.italic {
+  font-size: clamp(16px, 1.4vw, 22px);
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: -2px;
+}
+
+.lobby-join-banner .banner-main {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(28px, 2.7vw, 48px);
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 1.5px;
+  margin: 2px 0;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: -42px 14px 0px rgba(0, 0, 0, 0.38), 0 3px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* 3. Room Code Badge */
+.lobby-code-badge {
+  position: absolute;
+  top: 61vh;
+  left: 56vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: rotate(-5deg);
+  user-select: none;
+  pointer-events: none;
+}
+
+.lobby-code-badge .code-label {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(18px, 1.5vw, 25px);
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: -25px 8px 0px rgba(0, 0, 0, 0.38), 0 2px 4px rgba(0, 0, 0, 0.85);
+}
+
+.lobby-code-badge .code-value {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(56px, 5.4vw, 86px);
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 4px;
+  margin-top: 2px;
+  text-shadow: -52px 15px 0px rgba(0, 0, 0, 0.38), 0 4px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* 4. Footer Start Prompt */
+.lobby-start-prompt {
+  position: absolute;
+  bottom: 4vh;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(17px, 1.4vw, 22px);
+  color: #bd3131;
+  letter-spacing: 1px;
+  text-shadow: -30px 10px 0px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.95);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  animation: pulseStartPrompt 2.4s ease-in-out infinite alternate;
+}
+
+.lobby-start-prompt .highlight {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+@keyframes pulseStartPrompt {
+  0% {
+    opacity: 0.85;
+    transform: translateX(-50%) scale(1);
+  }
+
+  100% {
+    opacity: 1.0;
+    transform: translateX(-50%) scale(1.03);
+    text-shadow: 0 0 12px rgba(189, 49, 49, 0.5), 0 2px 8px rgba(0, 0, 0, 0.95);
+  }
+}
+
+.letter-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  perspective-origin: center center;
+  will-change: transform;
+}
+
+.shadow-slot {
+  position: absolute;
+  top: 15px;
+  left: -52px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+  transform-style: preserve-3d;
+}
+
+.letter-shadow {
+  height: 92px;
+  width: auto;
+  max-width: 105px;
+  object-fit: contain;
+  pointer-events: none;
+  filter: brightness(0);
+  opacity: 0.38;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.main-slot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+  transform-style: preserve-3d;
+}
+
+.token-3d {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d !important;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.layer-slice {
+  position: absolute;
+  height: 125px;
+  width: auto;
+  max-width: 135px;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.face-front {
+  transform: translateZ(10px);
+  backface-visibility: hidden;
+  z-index: 10;
+}
+
+.face-back {
+  transform: rotateY(180deg) scaleX(-1) translateZ(10px);
+  backface-visibility: hidden;
+  z-index: 10;
+  opacity: 0.68;
+}
+
+.edge-slice {
+  opacity: 1;
+  pointer-events: none;
+  backface-visibility: visible;
+}
+
+/* Eyes only during blackout transitions */
+.grid.eyes-only .edge-slice,
+.grid.eyes-only .face-back {
+  opacity: 0 !important;
+}
+
+/* =========================================
+   Intro Curtains Transition Layer
+   ========================================= */
+
+.curtains-container {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  opacity: 0;
+  display: flex;
+  overflow: hidden;
+  transition: opacity 1.8s ease-in-out;
+}
+
+.curtains-container.fade-in {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.curtains-container.hidden {
+  display: none;
+}
+
+.curtain-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50vw;
+  height: 100vh;
+  background-image: url('../assets/images/rooms/curtains.png');
+  background-repeat: repeat-x;
+  background-size: auto 100vh;
+  /* Rich, moody dark velvet lighting */
+  filter: brightness(0.62) contrast(1.12) saturate(0.92);
+  transition: transform 3.4s cubic-bezier(0.65, 0, 0.25, 1);
+  will-change: transform;
+}
+
+.curtain-panel.curtain-left {
+  left: 0;
+  background-position: right top;
+  transform-origin: left center;
+  /* Deep shadow cast onto the room behind */
+  box-shadow: 25px 0 50px rgba(0, 0, 0, 0.9), 65px 0 110px rgba(0, 0, 0, 0.65);
+}
+
+.curtain-panel.curtain-right {
+  left: 50vw;
+  background-position: left top;
+  transform-origin: right center;
+  /* Deep shadow cast onto the room behind */
+  box-shadow: -25px 0 50px rgba(0, 0, 0, 0.9), -65px 0 110px rgba(0, 0, 0, 0.65);
+}
+
+/* Curtain opening / stretching animation */
+.curtains-container.opening .curtain-panel.curtain-left {
+  transform: scaleX(0);
+}
+
+.curtains-container.opening .curtain-panel.curtain-right {
+  transform: scaleX(0);
+}
+
+.curtains-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.7) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55) 0%, transparent 20%, transparent 80%, rgba(0, 0, 0, 0.65) 100%);
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 3.2s ease;
+}
+
+.curtains-container.opening .curtains-vignette {
+  opacity: 0;
+}
+
+/* =========================================
+   Intro Sequence & Logo Reveal
+   ========================================= */
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: background-color 0.8s ease, opacity 1.4s ease;
+  overflow: hidden;
+}
+
+.intro-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.intro-overlay.transparent-bg {
+  background: transparent;
+}
+
+.intro-noise-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.31;
+  z-index: 5;
+  mix-blend-mode: screen;
+  image-rendering: pixelated;
+}
+
+.intro-logo {
+  position: relative;
+  z-index: 1;
+  max-width: clamp(260px, 46vw, 560px);
+  width: 80%;
+  height: auto;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transform: scale(0.85) rotate(-5deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-logo svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.intro-logo.reveal {
+  animation: logoSmoothGrow 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Individual letter quick springy wiggle when logo first shows */
+.intro-logo.reveal .logo-letter {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: letterQuickWiggle 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.intro-logo.reveal .letter-t {
+  animation-delay: 0.12s;
+}
+
+.intro-logo.reveal .letter-o1 {
+  animation-delay: 0.18s;
+}
+
+.intro-logo.reveal .letter-k {
+  animation-delay: 0.24s;
+}
+
+.intro-logo.reveal .letter-n {
+  animation-delay: 0.30s;
+}
+
+.intro-logo.reveal .letter-o2 {
+  animation-delay: 0.36s;
+}
+
+.intro-logo.reveal .letter-w {
+  animation-delay: 0.42s;
+}
+
+@keyframes letterQuickWiggle {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  20% {
+    transform: scale(1.18) rotate(-14deg);
+  }
+
+  45% {
+    transform: scale(1.10) rotate(12deg);
+  }
+
+  70% {
+    transform: scale(1.04) rotate(-6deg);
+  }
+
+  85% {
+    transform: scale(1.01) rotate(3deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes logoSmoothGrow {
+  0% {
+    opacity: 0;
+    transform: scale(0.80) rotate(-6deg);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.08) rotate(0deg);
+  }
+}
+
+/* =========================================
+   Question & Answers Stage Overlay
+   ========================================= */
+
+.question-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 22;
+  opacity: 0;
+  transition: opacity 0.75s ease;
+  overflow: hidden;
+}
+
+.question-stage.active {
+  opacity: 1;
+}
+
+.question-stage.hidden {
+  display: none;
+}
+
+/* 1. Question Box (Left Wall Perspective) */
+.question-box {
+  position: absolute;
+  left: clamp(12%, 17vw, 22%);
+  top: clamp(32%, 36vh, 42%);
+  max-width: clamp(260px, 32vw, 480px);
+  transform: rotate(-6deg);
+  transform-origin: center left;
+  user-select: none;
+}
+
+.question-text {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(22px, 2.5vw, 38px);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.6);
+}
+
+/* 2. Answers List (Right Wall Perspective & X-Axis Offsets) */
+.answers-list {
+  position: absolute;
+  right: clamp(14%, 22vw, 30%);
+  top: clamp(34%, 38vh, 44%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vh, 24px);
+  user-select: none;
+}
+
+.answer-item {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(10px, 1.2vw, 16px);
+  opacity: 0;
+  transform: rotate(3deg) translateX(45px);
+  transition: opacity 0.38s cubic-bezier(0.2, 0.8, 0.3, 1), transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* Staggered Alternating X-Axis Offsets (Right, Left, Right, Left) */
+.answer-item:nth-child(1).visible {
+  opacity: 1;
+  transform: rotate(3deg) translateX(28px);
+}
+
+.answer-item:nth-child(2).visible {
+  opacity: 1;
+  transform: rotate(3deg) translateX(-22px);
+}
+
+.answer-item:nth-child(3).visible {
+  opacity: 1;
+  transform: rotate(3deg) translateX(32px);
+}
+
+.answer-item:nth-child(4).visible {
+  opacity: 1;
+  transform: rotate(3deg) translateX(-18px);
+}
+
+/* Revealed State: Wrong choices dim, correct choice gets slightly smaller */
+.answers-list.revealed .answer-item {
+  opacity: 0.22;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.answers-list.revealed .answer-item.correct-choice {
+  opacity: 1 !important;
+  transform: rotate(3deg) scale(0.90) !important;
+}
+
+/* Yellow Handwritten Numbers */
+.answer-num {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(26px, 3vw, 44px);
+  font-weight: bold;
+  color: #f4ea4c;
+  line-height: 1;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95);
+  min-width: 22px;
+  display: inline-block;
+}
+
+.answer-text {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(20px, 2.2vw, 34px);
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+/* 3. Countdown Timer (Clean Minimal Circle) */
+.question-timer {
+  position: absolute;
+  left: clamp(20%, 26vw, 32%);
+  bottom: clamp(7%, 11vh, 15%);
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.9));
+}
+
+.circle-timer {
+  position: relative;
+  width: clamp(76px, 8vw, 108px);
+  height: clamp(76px, 8vw, 108px);
+  border-radius: 50%;
+  background: #ffffff;
+  border: 4px solid #1a1a1a;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.85);
+}
+
+/* Red Countdown Sector Wedge (Conic Gradient) */
+.watch-pie {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(#cf2228 0deg, #cf2228 var(--pie-angle, 180deg), transparent var(--pie-angle, 180deg), transparent 360deg);
+  opacity: 0.88;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.timer-digits {
+  position: relative;
+  z-index: 5;
+  font-family: "Special Elite", monospace, sans-serif;
+  font-size: clamp(26px, 2.8vw, 42px);
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+/* 4. Skip Intro Button */
+.skip-intro-btn {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  background: rgba(0, 0, 0, 0.65);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 100;
+  transition: background 0.2s ease, color 0.2s ease, opacity 0.3s ease;
+  pointer-events: auto;
+}
+
+.skip-intro-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.skip-intro-btn.hidden {
+  display: none;
+}
