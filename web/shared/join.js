@@ -19,7 +19,7 @@
   const nameInput = $('nameInput');
   const joinBtn = $('joinBtn');
   const errorEl = $('joinError');
-  const previewEl = $('gamePreview');
+  const nameCount = $('nameCount');
   const noticeEl = $('notice');
 
   const controllers = {};
@@ -44,47 +44,39 @@
   codeInput.value = (params.get('code') || '').toUpperCase().slice(0, 4);
   nameInput.value = store.get(localStorage, NAME_KEY) || '';
 
-  let lookupId = 0;
-  async function previewGame() {
-    const code = codeInput.value;
-    previewEl.textContent = '';
-    previewEl.classList.remove('bad');
-    if (code.length !== 4) return;
-    const id = ++lookupId;
-    const room = await RoomClient.lookup(code);
-    if (id !== lookupId) return;
-    if (!room) {
-      previewEl.textContent = 'Room not found';
-      previewEl.classList.add('bad');
-    } else {
-      const game = window.BARCODE_GAMES[room.game];
-      previewEl.textContent = `${game ? game.title : room.game} · ${room.players}/${room.maxPlayers}`;
-    }
+  function updateForm() {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    nameInput.value = nameInput.value.toUpperCase();
+    nameCount.textContent = nameInput.maxLength - nameInput.value.length;
+    joinBtn.disabled = codeInput.value.length !== 4 || !nameInput.value.trim();
   }
 
   codeInput.addEventListener('input', () => {
-    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
     errorEl.textContent = '';
+    updateForm();
     if (codeInput.value.length === 4 && !nameInput.value) nameInput.focus();
-    previewGame();
   });
 
-  nameInput.addEventListener('input', () => { errorEl.textContent = ''; });
+  nameInput.addEventListener('input', () => {
+    errorEl.textContent = '';
+    updateForm();
+  });
+
+  updateForm();
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const code = codeInput.value;
     const name = nameInput.value.trim();
-    if (code.length !== 4) return showError('Enter the 4-letter room code');
-    if (!name) return showError('Enter a name');
+    if (code.length !== 4 || !name) return;
     store.set(localStorage, NAME_KEY, name);
     join(code, name);
   });
 
   function showError(message) {
     errorEl.textContent = message;
-    joinBtn.disabled = false;
     joinBtn.textContent = 'Play';
+    updateForm();
   }
 
   /* ---------- Connection ---------- */
@@ -189,7 +181,5 @@
     codeInput.value = saved.code;
     nameInput.value = saved.name || nameInput.value;
     join(saved.code, saved.name, saved.playerToken);
-  } else if (codeInput.value.length === 4) {
-    previewGame();
   }
 })();

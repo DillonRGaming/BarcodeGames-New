@@ -5,7 +5,7 @@
  *   { type: 'lobby' }                         waiting for the game to start
  *   { type: 'question', answers: [4 strings] } show answer buttons
  *   { type: 'reveal', correct: boolean }      after the timer runs out
- *   { type: 'wait', text }                    anything else, e.g. between rounds
+ *   { type: 'wait', text? }                   between rounds (blank unless text is given)
  *
  * Messages to the host:
  *   { type: 'answer', index }                 0-based answer the player picked
@@ -23,10 +23,9 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   root.querySelector('.dtk-name').textContent = player.name;
   const body = root.querySelector('.dtk-body');
 
-  function showMessage(title, sub = '') {
-    body.innerHTML = '<h2 class="dtk-title"></h2><p class="dtk-sub"></p>';
+  function showMessage(title = '') {
+    body.innerHTML = '<h2 class="dtk-title"></h2>';
     body.querySelector('.dtk-title').textContent = title;
-    body.querySelector('.dtk-sub').textContent = sub;
   }
 
   function showQuestion(answers) {
@@ -52,19 +51,19 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   onMessage((data) => {
     switch (data.type) {
       case 'lobby':
-        showMessage("You're in!", 'Watch the screen. The game starts soon.');
+        showMessage();
         break;
       case 'question':
         showQuestion(data.answers);
         break;
       case 'reveal':
-        showMessage(data.correct ? 'Correct' : 'Wrong', data.correct ? 'You live... for now.' : 'Something is coming for you.');
+        showMessage(data.correct ? 'Correct' : 'Wrong');
         break;
       case 'wait':
-        showMessage(data.text || 'Watch the screen');
+        showMessage(data.text);
         break;
     }
   });
 
-  showMessage("You're in!", 'Watch the screen. The game starts soon.');
+  showMessage();
 });
