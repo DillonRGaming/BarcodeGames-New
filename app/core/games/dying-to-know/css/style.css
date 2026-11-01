@@ -1080,26 +1080,37 @@ body {
 
 /* 4. Skip Intro Button */
 .skip-intro-btn {
+  /* Same look as the lobby's "EVERYBODY'S IN", in off-white */
   position: fixed;
   top: 18px;
   right: 22px;
-  background: rgba(0, 0, 0, 0.65);
-  color: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 6px;
-  padding: 6px 14px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
   font-family: "Special Elite", cursive, sans-serif;
-  font-size: 14px;
+  font-size: clamp(17px, 1.4vw, 22px);
+  font-weight: bold;
+  text-decoration: underline;
+  letter-spacing: 1px;
+  color: #e8e2d6;
+  text-shadow: -30px 10px 0px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.95);
   cursor: pointer;
   z-index: 100;
-  transition: background 0.2s ease, color 0.2s ease, opacity 0.3s ease;
   pointer-events: auto;
+  animation: pulseSkipIntro 2.4s ease-in-out infinite alternate;
 }
 
-.skip-intro-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.5);
+@keyframes pulseSkipIntro {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.03);
+    text-shadow: 0 0 12px rgba(232, 226, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.95);
+  }
 }
 
 .skip-intro-btn.hidden {
