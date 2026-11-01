@@ -265,7 +265,7 @@ body {
   letter-spacing: 0.5px;
   white-space: nowrap;
   pointer-events: none;
-  text-shadow: 2px 2px 0 #000000, 3px 3px 6px rgba(0, 0, 0, 0.95);
+  text-shadow: 2px 2px 0 #000000; /* no blur: blurred shadows repaint every frame while players fly */
   user-select: none;
   opacity: 1;
   transition: opacity 0.35s ease;
@@ -588,7 +588,7 @@ body {
 }
 
 .face-back {
-  transform: rotateY(180deg) scaleX(-1) translateZ(10px);
+  transform: rotateY(180deg) translateZ(10px);
   backface-visibility: hidden;
   z-index: 10;
   opacity: 0.68;
@@ -603,6 +603,11 @@ body {
 /* Eyes only during blackout transitions */
 .grid.eyes-only .edge-slice,
 .grid.eyes-only .face-back {
+  opacity: 0 !important;
+}
+
+/* Names hidden while the lights are out */
+.grid.eyes-only .player-name {
   opacity: 0 !important;
 }
 

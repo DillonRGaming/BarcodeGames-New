@@ -460,9 +460,10 @@ class Player {
         this.spinSoundTriggers.whoosh = true;
         if (this.onStateChange) this.onStateChange(this, 'SOUND_WHOOSH');
       }
-      if (this.spinTimer >= 0.55) {
-        // Smooth fade of 3D extrusion edge slices as token turns edge-on (0.55s to 0.85s)
-        const fadeT = Math.min(1, Math.max(0, (this.spinTimer - 0.55) / 0.3));
+      if (this.spinTimer >= 0.4) {
+        // Fade the 3D edge slices (cut from the alive letter) before the token passes edge-on (~0.7s),
+        // so the alive letter never shows through mirrored from behind
+        const fadeT = Math.min(1, Math.max(0, (this.spinTimer - 0.4) / 0.25));
         const op = (1 - fadeT).toFixed(2);
         this.edgeSlices.forEach((s) => { s.style.opacity = op; });
         this.frontImg.style.opacity = op;

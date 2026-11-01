@@ -527,6 +527,11 @@ class GameManager {
     void this.questionStage.offsetWidth; // Force layout reflow
     this.questionStage.classList.add('active');
 
+    // Clock shows the full time as soon as the question appears (no flip)
+    this.flipClock.set(data.time || 15, false);
+    const timerEl = document.getElementById('questionTimer');
+    if (timerEl) timerEl.classList.remove('urgent');
+
     // 1. Play swish sound when question shows
     if (this.sound) {
       this.sound.playSwish(0.9);

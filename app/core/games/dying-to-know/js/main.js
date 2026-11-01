@@ -208,7 +208,8 @@ async function init() {
     const color = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
     const letter = letterForName(name);
     const aliveAsset = tintedLetter(assetCache[`alive_${letter}`], color);
-    const deadAsset = assetCache[`dead_${letter}`];
+    const deadAsset = tintedLetter(assetCache[`dead_${letter}`], color);
+    const glow = (alpha) => color + Math.round(alpha * 255).toString(16).padStart(2, '0');
     const edgeShade = shadeHex(color, 0.4);
     const index = players.length;
 
@@ -225,7 +226,7 @@ async function init() {
         front: bakeTexture(aliveAsset, 'none', 16),
         blink: bakeBlinkTexture(aliveAsset, 'none', 16),
         edge: bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px ${edgeShade}) brightness(0.72) contrast(1.12)`, 16),
-        dead: bakeTexture(deadAsset, 'drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28)', 64, 600),
+        dead: bakeTexture(deadAsset, `drop-shadow(0 0 4px ${glow(0.6)}) drop-shadow(0 0 14px ${glow(0.45)}) drop-shadow(0 0 28px ${glow(0.3)}) saturate(0.45) brightness(1.05)`, 64, 600),
         eyes: bakeEyesTexture(aliveAsset),
         aliveShadow: `assets/images/letters/${letter}.png`,
         deadShadow: `assets/images/letters-dead/${letter}.png`
