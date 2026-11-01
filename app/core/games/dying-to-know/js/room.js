@@ -361,6 +361,7 @@ class RoomManager {
     const roll = Math.random();
 
     if (roll < 0.3 && offscreenRight) {
+      // A small group of boxes side by side on the floor (these sacks don't stack)
       const boxes = Math.min(2 + Math.floor(Math.random() * 2), this.furnitureItems.filter((it) => !it.type).length);
       if (boxes < 1) return;
       let x = window.innerWidth + 100 + Math.random() * window.innerWidth;
@@ -369,15 +370,12 @@ class RoomManager {
         x = window.innerWidth + 100 + Math.random() * window.innerWidth;
         tries++;
       }
-      const flip = Math.random() < 0.5;
-      const h = window.innerHeight * (this.furnitureConfig['assets/images/box.png']?.heightPct || 0.15);
-      let bottom = 0;
       for (let i = 0; i < boxes; i++) {
         const slot = this.findHiddenSlot();
         if (!slot) break;
-        this.activateSlot(slot, x, this.pickBoxType(), flip, bottom);
-        // Each box sits into the one below (their lids are thin flaps, so a full-height step looks like floating)
-        bottom += h * 0.78;
+        const type = this.pickBoxType();
+        this.activateSlot(slot, x, type, Math.random() < 0.5, 0);
+        x += this.furnitureWidth(type) * (0.85 + Math.random() * 0.3);
       }
       return;
     }
