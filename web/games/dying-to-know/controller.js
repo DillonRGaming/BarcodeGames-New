@@ -8,10 +8,12 @@
  *   { type: 'show', index }                   reveal one answer, in sync with the TV
  *   { type: 'open' }                          countdown started: answers can be tapped
  *   { type: 'reveal', correct: boolean }      after the timer runs out
+ *   { type: 'intro' }                         intro playing (VIP sees Skip Intro)
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
  *
  * Messages to the host:
  *   { type: 'start' }                         VIP pressed "Everybody's in"
+ *   { type: 'skip' }                          VIP pressed "Skip Intro"
  *   { type: 'answer', index }                 0-based answer the player picked
  */
 
@@ -26,6 +28,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
       <section class="dtk-body"></section>
       <footer class="dtk-footer hidden">
         <button class="dtk-start" type="button">Everybody's in</button>
+        <button class="dtk-skip" type="button">Skip Intro</button>
       </footer>
     </div>
   `;
@@ -35,13 +38,21 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   const vipTags = root.querySelectorAll('.dtk-vip');
   const footer = root.querySelector('.dtk-footer');
   const startBtn = root.querySelector('.dtk-start');
+  const skipBtn = root.querySelector('.dtk-skip');
 
   let isVip = false;
   let screen = 'lobby';
 
   function updateFooter() {
-    footer.classList.toggle('hidden', !(isVip && screen === 'lobby'));
+    footer.classList.toggle('hidden', !(isVip && (screen === 'lobby' || screen === 'intro')));
+    startBtn.classList.toggle('hidden', screen !== 'lobby');
+    skipBtn.classList.toggle('hidden', screen !== 'intro');
   }
+
+  skipBtn.addEventListener('click', () => {
+    send({ type: 'skip' });
+    skipBtn.disabled = true;
+  });
 
   startBtn.addEventListener('click', () => {
     send({ type: 'start' });
@@ -112,6 +123,10 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         break;
       case 'reveal':
         showMessage(data.correct ? 'Correct' : 'Wrong');
+        break;
+      case 'intro':
+        skipBtn.disabled = false;
+        showMessage();
         break;
       case 'wait':
         showMessage(data.text);

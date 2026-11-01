@@ -112,6 +112,11 @@ class GameManager {
         if (index >= 0 && index < 4) this.answers.set(roomId, index + 1); // 1-based like correctIndex
         return;
       }
+      if (data.type === 'skip') {
+        const player = this.playersById.get(roomId);
+        if (player && player.isVip && this.gameState === 'INTRO') this.skipIntro();
+        return;
+      }
       if (data.type === 'start') {
         const player = this.playersById.get(roomId);
         if (player && player.isVip && this.gameState === 'LOBBY') this.startLobbyGame();
@@ -297,6 +302,7 @@ class GameManager {
     this.isIntroSkipped = true;
     this.isIntroRunning = false;
     this.gameState = 'PLAYING';
+    this.setPhoneState({ type: 'wait' });
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
 
@@ -341,7 +347,7 @@ class GameManager {
     this.gameState = 'INTRO';
     if (this.net) {
       this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
-      this.setPhoneState({ type: 'wait' });
+      this.setPhoneState({ type: 'intro' }); // VIP's phone gets a Skip Intro button
     }
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.remove('hidden');
@@ -479,6 +485,7 @@ class GameManager {
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
     this.gameState = 'PLAYING';
+    this.setPhoneState({ type: 'wait' });
 
     // 16. Show players in the 2x4 grid, wait 2s
     await new Promise((r) => setTimeout(r, 2000));

@@ -78,7 +78,7 @@ body[data-game='dying-to-know'] {
   justify-content: center;
   align-items: center;
   gap: 14px;
-  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+  padding: 16px 16px calc(14vh + env(safe-area-inset-bottom)); /* sits a little above centre */
   text-align: center;
 }
 
@@ -207,6 +207,37 @@ body[data-game='dying-to-know'] {
   animation: dtk-pulse 2.4s ease-in-out infinite alternate;
 }
 
+/* Same as the TV's "Skip Intro", in off-white */
+.dtk-skip {
+  appearance: none;
+  padding: 18px 12px;
+  border: 0;
+  background: none;
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: 26px;
+  font-weight: bold;
+  text-decoration: underline;
+  letter-spacing: 1px;
+  color: #e8e2d6;
+  text-shadow: -30px 10px 0 rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.95);
+  cursor: pointer;
+  animation: dtk-pulse-skip 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes dtk-pulse-skip {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.03);
+    text-shadow: 0 0 12px rgba(232, 226, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.95);
+  }
+}
+
+.dtk-skip:disabled,
 .dtk-start:disabled {
   opacity: 0.4;
   animation: none;
