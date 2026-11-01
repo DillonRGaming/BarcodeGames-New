@@ -879,7 +879,7 @@ body {
   top: clamp(34%, 38vh, 44%);
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 2vh, 24px);
+  gap: clamp(16px, 2.8vh, 32px);
   user-select: none;
 }
 
@@ -982,7 +982,7 @@ body {
 .question-timer {
   position: absolute;
   left: clamp(20%, 26vw, 32%);
-  bottom: clamp(20%, 24vh, 28%);
+  bottom: clamp(23%, 27vh, 31%);
   pointer-events: none;
   user-select: none;
   --card-w: clamp(52px, 4.6vw, 74px);
