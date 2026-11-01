@@ -2,6 +2,8 @@
  * Manager.js - Core Scene Manager, Events, and Transitions
  */
 
+const MAX_PLAYERS = 8;
+
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {
     this.room = room;
@@ -96,16 +98,60 @@ class GameManager {
       joinUrlEl.textContent = window.barcode.joinUrl.toUpperCase();
     }
 
-    this.room = new RoomHost({ game: 'dying-to-know', maxPlayers: 8 });
-    this.room.on('code', (code) => this.setRoomCode(code));
-    this.room.on('status', (status) => {
-      if (this.roomCodeEl) this.roomCodeEl.classList.toggle('offline', status !== 'open');
+    this.net = new RoomHost({ game: 'dying-to-know', maxPlayers: MAX_PLAYERS });
+    this.playersById = new Map(); // room player id → Player
+    this.net.on('code', (code) => this.setRoomCode(code));
+    this.net.on('join', (info) => this.addPlayer(info));
+    this.net.on('reconnect', (info) => {
+      const player = this.playersById.get(info.id);
+      if (player) this.sendProfile(info.id, player);
     });
-    this.room.connect();
+    this.net.on('status', (status) => {
+      if (this.netCodeEl) this.netCodeEl.classList.toggle('offline', status !== 'open');
+    });
+    this.net.connect();
+  }
+
+  /**
+   * Add a player to the lobby. The first player is VIP; colours follow join order.
+   * `info` is { id, name } from the room server, or a dev bot with no id.
+   */
+  addPlayer(info) {
+    if (!this.createPlayer) {
+      // Textures still loading: add them once main.js is ready
+      (this.pendingJoins = this.pendingJoins || []).push(info);
+      return null;
+    }
+    if (this.players.length >= MAX_PLAYERS) return null;
+
+    const player = this.createPlayer({
+      name: info.name,
+      colorIndex: this.players.length,
+      isVip: this.players.length === 0,
+    });
+    if (info.id) {
+      player.roomId = info.id;
+      this.playersById.set(info.id, player);
+      this.sendProfile(info.id, player);
+    }
+    if (this.sound) this.sound.playLight();
+    return player;
+  }
+
+  /** Tell a phone what it looks like in the game (colour for its name bar) */
+  sendProfile(roomId, player) {
+    this.net.sendTo(roomId, {
+      type: 'profile',
+      color: player.nameColor,
+      letter: player.letter,
+      vip: player.isVip,
+    });
   }
 
   setPlayers(players) {
     this.players = players;
+    (this.pendingJoins || []).forEach((info) => this.addPlayer(info));
+    this.pendingJoins = [];
   }
 
   playRoomMusic(roomIndex = 0, fadeDuration = 2200) {
@@ -877,6 +923,10 @@ class GameManager {
       if (e.key >= '1' && e.key <= '8') {
         const slotIdx = parseInt(e.key, 10) - 1;
         this.togglePlayerVisible(slotIdx);
+      } else if (key === 'p') {
+        // Dev: add a bot player
+        const bots = ['SPOOKY', 'GHOUL', 'BONES', 'MOTH', 'CREEP', 'WISP', 'HOLLOW', 'NIGHT'];
+        this.addPlayer({ name: bots[this.players.length % bots.length] });
       } else if (key === 'v') {
         if (this.players[0]) {
           this.players[0].setVip(!this.players[0].isVip);

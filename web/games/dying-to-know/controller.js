@@ -2,6 +2,7 @@
  * Dying to Know — phone controller.
  *
  * Messages from the host app (data):
+ *   { type: 'profile', color, letter, vip }  how this player looks in the game
  *   { type: 'lobby' }                         waiting for the game to start
  *   { type: 'question', answers: [4 strings] } show answer buttons
  *   { type: 'reveal', correct: boolean }      after the timer runs out
@@ -22,6 +23,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   `;
   root.querySelector('.dtk-name').textContent = player.name;
   const body = root.querySelector('.dtk-body');
+  const header = root.querySelector('.dtk-header');
 
   function showMessage(title = '') {
     body.innerHTML = '<h2 class="dtk-title"></h2>';
@@ -50,6 +52,10 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
 
   onMessage((data) => {
     switch (data.type) {
+      case 'profile':
+        header.style.setProperty('--player-color', data.color);
+        header.classList.add('has-color');
+        break;
       case 'lobby':
         showMessage();
         break;

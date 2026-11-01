@@ -22,8 +22,15 @@ body[data-game='dying-to-know'] {
   display: flex;
   justify-content: center;
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-  background: #0b0805;
-  border-bottom: 2px solid #efe6d2;
+  background-color: var(--player-color, #0b0805);
+  background-image: url('assets/knit.svg');
+  background-size: 30px 60px;
+  border-bottom: 3px solid #000;
+  transition: background-color 0.4s;
+}
+
+.dtk-header.has-color .dtk-name {
+  color: #120d08;
 }
 
 .dtk-name {

@@ -3,7 +3,6 @@
  */
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-const TOTAL_LETTERS = 8;
 const assetCache = {};
 
 /* =========================================
@@ -121,9 +120,30 @@ function bakeEyesTexture(imgElement) {
   }
 }
 
-function getRandomLetters(count) {
-  const shuffled = [...alphabet].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
+/* =========================================
+   Player Colours & Letters
+   ========================================= */
+
+// Fixed palette: the Nth person to join always gets colour N. Filters tint the red base letter art.
+const PLAYER_COLORS = [
+  { hex: '#c7595e', filter: 'hue-rotate(0deg) saturate(1.1) brightness(1.05)' },     // red
+  { hex: '#5e94c2', filter: 'hue-rotate(200deg) saturate(1.15) brightness(1.0)' },   // blue
+  { hex: '#7ab372', filter: 'hue-rotate(100deg) saturate(1.05) brightness(1.02)' },  // green
+  { hex: '#d4cc6d', filter: 'hue-rotate(50deg) saturate(1.2) brightness(1.15)' },    // yellow
+  { hex: '#9d7cbd', filter: 'hue-rotate(270deg) saturate(1.1) brightness(1.05)' },   // purple
+  { hex: '#e06f97', filter: 'hue-rotate(330deg) saturate(1.1) brightness(1.1)' },    // pink
+  { hex: '#e08a45', filter: 'hue-rotate(22deg) saturate(1.35) brightness(1.15)' },   // orange
+  { hex: '#4fa8a0', filter: 'hue-rotate(160deg) saturate(1.0) brightness(1.05)' },   // teal
+  { hex: '#c4996b', filter: 'hue-rotate(25deg) saturate(0.95) brightness(1.0)' },    // brown
+  { hex: '#c2c2c2', filter: 'saturate(0.08) brightness(1.25) contrast(1.1)' },       // grey
+];
+
+const NAME_TILTS = [-6, 4, -3, 5, -4, 6, -5, 4];
+
+// First A–Z character of the name (names come in uppercase from the join site)
+function letterForName(name) {
+  const match = String(name).toUpperCase().match(/[A-Z]/);
+  return match ? match[0] : alphabet[Math.floor(Math.random() * alphabet.length)];
 }
 
 /* =========================================
@@ -144,10 +164,8 @@ async function init() {
   const sound = new SoundController();
   const manager = new GameManager({ room, camera, sound, gridEl, players: [] });
 
-  // 2. Decode Active Lobby Characters & Core Assets for Instant Colored Textures
-  const activeChars = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-  const priorityDecodes = [];
-
+  // 2. Decode every letter (alive + dead) up front so join-time texture baking is instant
+  const decodes = [];
   alphabet.forEach((char) => {
     const alive = new Image();
     alive.src = `assets/images/letters/${char}.png`;
@@ -157,19 +175,14 @@ async function init() {
     dead.src = `assets/images/letters-dead/${char}.png`;
     assetCache[`dead_${char}`] = dead;
 
-    if (activeChars.includes(char)) {
-      if (alive.decode) priorityDecodes.push(alive.decode().catch(() => { }));
-      if (dead.decode) priorityDecodes.push(dead.decode().catch(() => { }));
-    } else {
-      if (alive.decode) alive.decode().catch(() => { });
-      if (dead.decode) dead.decode().catch(() => { });
-    }
+    if (alive.decode) decodes.push(alive.decode().catch(() => { }));
+    if (dead.decode) decodes.push(dead.decode().catch(() => { }));
   });
 
   ['assets/images/rooms/lobby.png', 'assets/images/web.png', 'assets/images/web-2.png'].forEach((src) => {
     const img = new Image();
     img.src = src;
-    if (img.decode) priorityDecodes.push(img.decode().catch(() => { }));
+    if (img.decode) decodes.push(img.decode().catch(() => { }));
   });
 
   // Preload and mount logo.svg into #introLogo container
@@ -183,51 +196,34 @@ async function init() {
       .catch(() => { });
   }
 
-  // Fast await on the 8 tiny optimized images (~10ms) so colors bake with 100% precision
-  await Promise.all(priorityDecodes);
+  await Promise.all(decodes);
 
-  // 3. Instantiate Players with Single-Letter Alphabet Names & Themes
-  const LOBBY_PROFILES = [
-    { name: 'A', color: '#e06f97', filter: 'hue-rotate(330deg) saturate(1.1) brightness(1.1)', tilt: -6, isVip: false },
-    { name: 'B', color: '#5e94c2', filter: 'hue-rotate(200deg) saturate(1.15) brightness(1.0)', tilt: 4, isVip: false },
-    { name: 'C', color: '#7ab372', filter: 'hue-rotate(100deg) saturate(1.05) brightness(1.02)', tilt: -3, isVip: false },
-    { name: 'D', color: '#c7595e', filter: 'hue-rotate(0deg) saturate(1.1) brightness(1.05)', tilt: 5, isVip: false },
-    { name: 'E', color: '#9d7cbd', filter: 'hue-rotate(270deg) saturate(1.1) brightness(1.05)', tilt: -4, isVip: true },
-    { name: 'F', color: '#d4cc6d', filter: 'hue-rotate(50deg) saturate(1.2) brightness(1.15)', tilt: 6, isVip: false },
-    { name: 'G', color: '#c2c2c2', filter: 'saturate(0.08) brightness(1.25) contrast(1.1)', tilt: -5, isVip: false },
-    { name: 'H', color: '#c4996b', filter: 'hue-rotate(25deg) saturate(0.95) brightness(1.0)', tilt: 4, isVip: false },
-  ];
-
+  // 3. Players are created as people join (see GameManager._initRoom)
   const players = [];
 
-  LOBBY_PROFILES.forEach((profile, index) => {
-    // First letter of the nickname
-    const letter = profile.name.trim().charAt(0).toUpperCase() || 'A';
+  manager.createPlayer = ({ name, colorIndex, isVip = false }) => {
+    const color = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
+    const letter = letterForName(name);
     const aliveAsset = assetCache[`alive_${letter}`];
     const deadAsset = assetCache[`dead_${letter}`];
-    const filter = profile.filter || 'none';
+    const filter = color.filter;
+    const index = players.length;
 
     // Original high-quality texture filters preserving eye whites, depth, and contrast
-    const frontTexture = bakeTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16);
-    const blinkTexture = bakeBlinkTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16);
-    const edgeTexture = bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px #652224) brightness(0.72) contrast(1.12) saturate(0.85) ${filter}`, 16);
-    const deadTexture = bakeTexture(deadAsset, `drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28) ${filter}`, 64, 600);
-    const eyesTexture = bakeEyesTexture(aliveAsset);
-
     const player = new Player({
       letter,
       index,
-      name: profile.name,
-      color: profile.color,
-      tilt: profile.tilt,
-      isVip: profile.isVip,
+      name,
+      color: color.hex,
+      tilt: NAME_TILTS[index % NAME_TILTS.length],
+      isVip,
       isVisible: true,
       textures: {
-        front: frontTexture,
-        blink: blinkTexture,
-        edge: edgeTexture,
-        dead: deadTexture,
-        eyes: eyesTexture,
+        front: bakeTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16),
+        blink: bakeBlinkTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16),
+        edge: bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px #652224) brightness(0.72) contrast(1.12) saturate(0.85) ${filter}`, 16),
+        dead: bakeTexture(deadAsset, `drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28) ${filter}`, 64, 600),
+        eyes: bakeEyesTexture(aliveAsset),
         aliveShadow: `assets/images/letters/${letter}.png`,
         deadShadow: `assets/images/letters-dead/${letter}.png`
       },
@@ -236,7 +232,8 @@ async function init() {
     });
 
     players.push(player);
-  });
+    return player;
+  };
 
   manager.setPlayers(players);
 
