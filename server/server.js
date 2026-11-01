@@ -61,7 +61,19 @@ function roomInfo(room) {
     players: room.players.size,
     maxPlayers: room.maxPlayers,
     locked: room.locked,
+    // Players who dropped out mid-game; typing one of these names rejoins as them
+    reconnectable: [...room.players.values()].filter((p) => !p.ws).map((p) => p.name),
   };
+}
+
+function attachPlayer(ws, room, player) {
+  if (player.ws && player.ws !== ws) player.ws.close(4000, 'replaced');
+  player.ws = ws;
+  ws.role = 'player';
+  ws.room = room;
+  ws.playerId = player.id;
+  send(ws, { type: 'room:joined', code: room.code, game: room.game, player: publicPlayer(player), playerToken: player.token, reconnected: true, hostConnected: !!room.host });
+  send(room.host, { type: 'player:reconnected', player: publicPlayer(player) });
 }
 
 /* =========================================
@@ -169,24 +181,21 @@ const handlers = {
     if (!room) return fail(ws, 'ROOM_NOT_FOUND', "That room code doesn't exist");
 
     // Reconnect with a saved token (phone locked, page refreshed...)
-    const existing = msg.playerToken && [...room.players.values()].find((p) => p.token === msg.playerToken);
-    if (existing) {
-      if (existing.ws && existing.ws !== ws) existing.ws.close(4000, 'replaced');
-      existing.ws = ws;
-      ws.role = 'player';
-      ws.room = room;
-      ws.playerId = existing.id;
-      send(ws, { type: 'room:joined', code: room.code, game: room.game, player: publicPlayer(existing), playerToken: existing.token, reconnected: true, hostConnected: !!room.host });
-      send(room.host, { type: 'player:reconnected', player: publicPlayer(existing) });
-      return;
-    }
+    const players = [...room.players.values()];
+    const byToken = msg.playerToken && players.find((p) => p.token === msg.playerToken);
+    if (byToken) return attachPlayer(ws, room, byToken);
 
     const name = cleanName(msg.name);
     if (!name) return fail(ws, 'BAD_REQUEST', 'Enter a name');
+
+    // Reconnect by name: same code + name as a player who dropped out
+    const lower = name.toLowerCase();
+    const byName = players.find((p) => !p.ws && p.name.toLowerCase() === lower);
+    if (byName) return attachPlayer(ws, room, byName);
+
     if (room.locked) return fail(ws, 'ROOM_LOCKED', 'That game has already started');
     if (room.players.size >= room.maxPlayers) return fail(ws, 'ROOM_FULL', 'That room is full');
-    const lower = name.toLowerCase();
-    if ([...room.players.values()].some((p) => p.name.toLowerCase() === lower)) {
+    if (players.some((p) => p.name.toLowerCase() === lower)) {
       return fail(ws, 'NAME_TAKEN', 'Someone in that room already has that name');
     }
 

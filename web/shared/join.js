@@ -47,26 +47,37 @@
   nameInput.value = store.get(localStorage, NAME_KEY) || '';
 
   let codeValid = null; // null = not checked yet, true / false once the server answers
+  let room = null; // latest lookup of the typed code
   let lookupId = 0;
+  let joining = false;
 
   function updateForm() {
     codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
     nameInput.value = nameInput.value.toUpperCase();
     nameCount.textContent = nameInput.maxLength - nameInput.value.length;
+    if (joining) return;
     joinBtn.disabled = codeInput.value.length !== 4 || codeValid === false || !nameInput.value.trim();
+    const name = nameInput.value.trim();
+    const canReconnect = room && room.reconnectable && room.reconnectable.includes(name);
+    joinBtn.textContent = canReconnect ? 'Reconnect' : 'Play';
   }
 
   // Tick + game name when the code exists, X when it doesn't
   async function checkCode() {
     const id = ++lookupId;
-    codeValid = null;
-    codeStatus.className = 'code-status';
-    gameNameEl.textContent = '';
+    const sameCode = room && room.code === codeInput.value;
+    if (!sameCode) {
+      codeValid = null;
+      room = null;
+      codeStatus.className = 'code-status';
+      gameNameEl.textContent = '';
+    }
     updateForm();
     if (codeInput.value.length !== 4) return;
 
-    const room = await RoomClient.lookup(codeInput.value);
+    const found = await RoomClient.lookup(codeInput.value);
     if (id !== lookupId) return;
+    room = found;
     codeValid = !!room;
     codeStatus.className = `code-status ${room ? 'ok' : 'bad'}`;
     if (room) gameNameEl.textContent = (window.BARCODE_GAMES[room.game] || { title: room.game }).title;
@@ -79,9 +90,13 @@
     if (codeInput.value.length === 4 && !nameInput.value) nameInput.focus();
   });
 
+  // Re-check the room while typing a name, so RECONNECT shows for players who dropped out
+  let nameTimer = null;
   nameInput.addEventListener('input', () => {
     errorEl.textContent = '';
     updateForm();
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(checkCode, 300);
   });
 
   checkCode();
@@ -97,15 +112,16 @@
 
   function showError(message) {
     errorEl.textContent = message;
-    joinBtn.textContent = 'Play';
+    joining = false;
     updateForm();
+    checkCode();
   }
 
   /* ---------- Connection ---------- */
 
   function join(code, name, playerToken = null) {
+    joining = true;
     joinBtn.disabled = true;
-    joinBtn.textContent = 'Joining…';
 
     client = new RoomClient();
     client.on('joined', onJoined);

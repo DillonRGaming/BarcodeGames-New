@@ -4,7 +4,8 @@ One server for every game. It knows nothing about game rules: it only creates ro
 lets players join them by code, and routes JSON messages between the host app and players.
 
 - WebSocket: `wss://api.barcodegames.fun` (dev: `ws://localhost:8787`)
-- HTTP: `GET /rooms/:code` returns `{ code, game, players, maxPlayers, locked }`, or 404
+- HTTP: `GET /rooms/:code` returns `{ code, game, players, maxPlayers, locked, reconnectable[] }`, or 404
+  (`reconnectable` = names of players who dropped out and can rejoin)
 
 Every message is JSON with a `type`.
 
@@ -27,7 +28,8 @@ Every message is JSON with a `type`.
 | `send` | `data` | host gets `msg { from: playerId, data }` |
 
 Save `playerToken` (the site keeps it in sessionStorage). Sending it back with `player:join`
-rejoins as the same player, even if the room is locked or full.
+rejoins as the same player, even if the room is locked or full. Joining with the same name as a
+player who is currently disconnected also rejoins as them (`reconnected: true`).
 
 ## Server → host
 

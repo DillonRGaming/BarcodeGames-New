@@ -110,8 +110,12 @@ class GameManager {
     });
     this.net.on('reconnect', (info) => {
       const player = this.playersById.get(info.id);
-      if (player) this.sendProfile(info.id, player);
+      if (!player) return;
+      this.sendProfile(info.id, player);
+      if (this.phoneState) this.net.sendTo(info.id, this.phoneState); // put them back on the current screen
     });
+    // Quitting the app ends the room so phones are kicked straight away
+    window.addEventListener('beforeunload', () => this.net.close());
     this.net.on('status', (status) => {
       if (this.roomCodeEl) this.roomCodeEl.classList.toggle('offline', status !== 'open');
     });
@@ -147,6 +151,12 @@ class GameManager {
     }
     if (this.sound) this.sound.playLight();
     return player;
+  }
+
+  /** Send every phone the same screen, remembered so reconnecting phones get it too */
+  setPhoneState(data) {
+    this.phoneState = data;
+    this.net.broadcast(data);
   }
 
   /** Remove a player from the lobby; VIP passes to whoever joined next */
@@ -303,6 +313,7 @@ class GameManager {
     this.isIntroRunning = true;
     this.isIntroSkipped = false;
     this.gameState = 'INTRO';
+    if (this.net) this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.remove('hidden');
 
