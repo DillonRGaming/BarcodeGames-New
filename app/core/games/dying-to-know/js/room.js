@@ -77,14 +77,14 @@ class RoomManager {
     this.introNoise = new NoiseDirector('#introNoiseCanvas', 11, 0.45); // Faint, subtle at 11fps
 
     this.backgrounds = [
-      'assets/images/rooms/lobby.png',
+      'assets/images/rooms/curtains.png',
       'assets/images/rooms/background.png',
       'assets/images/rooms/background-2.png',
       'assets/images/rooms/background-3.png',
       'assets/images/rooms/background-4.png'
     ];
 
-    // Start on lobby.png
+    // Start on the curtains (lobby)
     this.currentBgIndex = 0;
     this.bgSlices = [];
 

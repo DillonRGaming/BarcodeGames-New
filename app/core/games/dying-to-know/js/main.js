@@ -182,7 +182,7 @@ async function init() {
     if (dead.decode) decodes.push(dead.decode().catch(() => { }));
   });
 
-  ['assets/images/rooms/lobby.png', 'assets/images/web.png', 'assets/images/web-2.png'].forEach((src) => {
+  ['assets/images/rooms/curtains.png', 'assets/images/web.png', 'assets/images/web-2.png'].forEach((src) => {
     const img = new Image();
     img.src = src;
     if (img.decode) decodes.push(img.decode().catch(() => { }));
