@@ -102,18 +102,24 @@ class GameManager {
     this.playersById = new Map(); // room player id → Player
     this.net.on('code', (code) => this.setRoomCode(code));
     this.net.on('join', (info) => this.addPlayer(info));
+    this.net.on('leave', (roomId) => {
+      // Leaving in the lobby removes you; once the game has started you can reconnect
+      if (this.gameState !== 'LOBBY') return;
+      this.removePlayer(roomId);
+      this.net.kick(roomId);
+    });
     this.net.on('reconnect', (info) => {
       const player = this.playersById.get(info.id);
       if (player) this.sendProfile(info.id, player);
     });
     this.net.on('status', (status) => {
-      if (this.netCodeEl) this.netCodeEl.classList.toggle('offline', status !== 'open');
+      if (this.roomCodeEl) this.roomCodeEl.classList.toggle('offline', status !== 'open');
     });
     this.net.connect();
   }
 
   /**
-   * Add a player to the lobby. The first player is VIP; colours follow join order.
+   * Add a player to the lobby. The first player is VIP; each takes the first free colour.
    * `info` is { id, name } from the room server, or a dev bot with no id.
    */
   addPlayer(info) {
@@ -124,11 +130,16 @@ class GameManager {
     }
     if (this.players.length >= MAX_PLAYERS) return null;
 
+    const usedColors = new Set(this.players.map((p) => p.colorIndex));
+    let colorIndex = 0;
+    while (usedColors.has(colorIndex)) colorIndex++;
+
     const player = this.createPlayer({
       name: info.name,
-      colorIndex: this.players.length,
+      colorIndex,
       isVip: this.players.length === 0,
     });
+    player.colorIndex = colorIndex;
     if (info.id) {
       player.roomId = info.id;
       this.playersById.set(info.id, player);
@@ -136,6 +147,23 @@ class GameManager {
     }
     if (this.sound) this.sound.playLight();
     return player;
+  }
+
+  /** Remove a player from the lobby; VIP passes to whoever joined next */
+  removePlayer(roomId) {
+    const player = this.playersById.get(roomId);
+    if (!player) return;
+    this.playersById.delete(roomId);
+    const idx = this.players.indexOf(player);
+    if (idx !== -1) this.players.splice(idx, 1);
+    player.slot.remove();
+
+    if (player.isVip && this.players[0]) {
+      const next = this.players[0];
+      next.setVip(true);
+      if (next.roomId) this.sendProfile(next.roomId, next);
+    }
+    if (this.sound) this.sound.playWhoosh();
   }
 
   /** Tell a phone what it looks like in the game (colour for its name bar) */
