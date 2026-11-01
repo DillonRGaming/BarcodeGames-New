@@ -961,13 +961,43 @@ body {
   user-select: none;
   --card-w: clamp(52px, 4.6vw, 74px);
   --card-h: calc(var(--card-w) * 1.4);
-  --card-bg: #1b1b1b;
-  --digit: #f4f1ea;
+  --card-bg: #262626;
+  --digit: #ffffff;
 }
 
+/* One card holding both digits, split by a hinge with a tab at each side */
 .flip-clock {
+  position: relative;
   display: flex;
-  gap: 6px;
+  padding: 0 calc(var(--card-w) * 0.12);
+  background: var(--card-bg);
+  border-radius: calc(var(--card-w) * 0.12);
+}
+
+.flip-clock::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: #0b0b0b;
+  z-index: 2;
+}
+
+.flip-clock::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 50%;
+  height: calc(var(--card-h) * 0.14);
+  transform: translateY(-50%);
+  background:
+    linear-gradient(#3d3d3d, #3d3d3d) left / 7px 100% no-repeat,
+    linear-gradient(#3d3d3d, #3d3d3d) right / 7px 100% no-repeat;
+  z-index: 3;
 }
 
 .flip-card {
@@ -984,7 +1014,7 @@ body {
   position: absolute;
   left: 0;
   width: 100%;
-  height: calc(50% - 1px); /* 2px hinge gap */
+  height: 50%;
   overflow: hidden;
   background: var(--card-bg);
   backface-visibility: hidden;
@@ -1002,13 +1032,11 @@ body {
 
 .flip-top {
   top: 0;
-  border-radius: 5px 5px 0 0;
   transform-origin: 50% 100%;
 }
 
 .flip-bottom {
   bottom: 0;
-  border-radius: 0 0 5px 5px;
   transform-origin: 50% 0%;
 }
 
