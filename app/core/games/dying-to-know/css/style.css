@@ -865,7 +865,6 @@ body {
   line-height: 1.2;
   color: #ffffff;
   letter-spacing: -0.2px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.6);
 }
 
 /* 2. Answers List (Right Wall Perspective & X-Axis Offsets) */
@@ -920,75 +919,130 @@ body {
   transform: rotate(3deg) scale(0.90) !important;
 }
 
-/* Yellow Handwritten Numbers */
-.answer-num {
-  font-family: "Special Elite", cursive, sans-serif;
-  font-size: clamp(26px, 3vw, 44px);
-  font-weight: bold;
-  color: #f4ea4c;
-  line-height: 1;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95);
-  min-width: 22px;
-  display: inline-block;
+/* Number tiles: flat squares, each its own colour and tilt */
+.answer-item {
+  align-items: center;
 }
+
+.answer-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(22px, 2.4vw, 36px);
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.answer-item:nth-child(1) .answer-num { background: #a9b6ee; color: #1b1b22; transform: rotate(-6deg); }
+.answer-item:nth-child(2) .answer-num { background: #2e2e2e; color: #f4f1ea; transform: rotate(4deg); }
+.answer-item:nth-child(3) .answer-num { background: #e6e0cf; color: #1b1b1b; transform: rotate(-3deg); }
+.answer-item:nth-child(4) .answer-num { background: #f2e04a; color: #1b1b1b; transform: rotate(5deg); }
 
 .answer-text {
   font-family: "Special Elite", cursive, sans-serif;
-  font-size: clamp(20px, 2.2vw, 34px);
+  font-size: clamp(22px, 2.4vw, 38px);
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
   letter-spacing: 0.3px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.5);
 }
 
-/* 3. Countdown Timer (Clean Minimal Circle) */
+/* 3. Countdown Timer: flat 2D flip clock */
 .question-timer {
   position: absolute;
   left: clamp(20%, 26vw, 32%);
   bottom: clamp(20%, 24vh, 28%);
   pointer-events: none;
   user-select: none;
+  --card-w: clamp(52px, 4.6vw, 74px);
+  --card-h: calc(var(--card-w) * 1.4);
+  --card-bg: #1b1b1b;
+  --digit: #f4f1ea;
 }
 
-.circle-timer {
+.flip-clock {
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  background: #2b8f93;
+  border-radius: 10px;
+}
+
+.flip-card {
   position: relative;
-  width: clamp(110px, 10vw, 150px);
-  height: clamp(110px, 10vw, 150px);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  display: grid;
-  place-items: center;
-}
-
-/* Remaining time as a ring that drains clockwise */
-.watch-pie {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(transparent 0deg var(--pie-angle, 0deg), #ffffff var(--pie-angle, 0deg) 360deg);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  pointer-events: none;
-}
-
-.timer-digits {
-  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+  perspective: 400px;
   font-family: "Special Elite", monospace, sans-serif;
-  font-size: clamp(44px, 4.2vw, 64px);
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  font-size: calc(var(--card-h) * 0.95);
+  color: var(--digit);
+}
+
+.flip-half {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: calc(50% - 1px); /* 2px hinge gap */
+  overflow: hidden;
+  background: var(--card-bg);
+  backface-visibility: hidden;
+}
+
+.flip-half span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: var(--card-h);
+  line-height: var(--card-h);
+  text-align: center;
+}
+
+.flip-top {
+  top: 0;
+  border-radius: 5px 5px 0 0;
+  transform-origin: 50% 100%;
+}
+
+.flip-bottom {
+  bottom: 0;
+  border-radius: 0 0 5px 5px;
+  transform-origin: 50% 0%;
+}
+
+.flip-bottom span {
+  bottom: 0;
+}
+
+.flip-flap-top,
+.flip-flap-bottom {
+  display: none;
+}
+
+.flip-card.flipping .flip-flap-top {
+  display: block;
+  animation: flip-top-fold 0.26s ease-in forwards;
+}
+
+.flip-card.flipping .flip-flap-bottom {
+  display: block;
+  transform: rotateX(90deg);
+  animation: flip-bottom-fold 0.26s 0.26s ease-out forwards;
+}
+
+@keyframes flip-top-fold {
+  to { transform: rotateX(-90deg); }
+}
+
+@keyframes flip-bottom-fold {
+  to { transform: rotateX(0deg); }
 }
 
 /* Last 5 seconds */
-.question-timer.urgent .watch-pie {
-  background: conic-gradient(transparent 0deg var(--pie-angle, 0deg), #ff3b3b var(--pie-angle, 0deg) 360deg);
-}
-
-.question-timer.urgent .timer-digits {
-  color: #ff3b3b;
+.question-timer.urgent {
+  --digit: #ff4a3d;
 }
 
 /* 4. Skip Intro Button */

@@ -34,7 +34,7 @@ class GameManager {
     this.questionStage = document.getElementById('questionStage');
     this.questionTextEl = document.getElementById('questionText');
     this.answersListEl = document.getElementById('answersList');
-    this.timerDigitsEl = document.getElementById('timerDigits');
+    this.flipClock = new FlipClock(document.getElementById('flipClock'), 2);
     this.gameRoomCodeEl = document.getElementById('gameRoomCode');
     this.questionTimer = null;
     this.questionSeconds = 15;
@@ -603,17 +603,9 @@ class GameManager {
     }
 
     const updateWatchUI = (s) => {
-      if (this.timerDigitsEl) {
-        this.timerDigitsEl.textContent = Math.max(0, s);
-      }
+      this.flipClock.set(s);
       const timerEl = document.getElementById('questionTimer');
       if (timerEl) timerEl.classList.toggle('urgent', s <= 5);
-      const pie = document.getElementById('watchPie');
-      if (pie) {
-        const progress = Math.max(0, Math.min(1, s / totalSeconds));
-        const angle = Math.round((1 - progress) * 360);
-        pie.style.setProperty('--pie-angle', `${angle}deg`);
-      }
     };
 
     updateWatchUI(this.questionSeconds);
