@@ -930,6 +930,8 @@ body {
   place-items: center;
   width: 1.25em;
   height: 1.25em;
+  box-sizing: border-box;
+  padding-top: 0.28em; /* Special Elite digits sit 0.14em high in the line box */
   font-family: "Special Elite", cursive, sans-serif;
   font-size: clamp(22px, 2.4vw, 36px);
   line-height: 1;
@@ -966,9 +968,6 @@ body {
 .flip-clock {
   display: flex;
   gap: 6px;
-  padding: 10px;
-  background: #2b8f93;
-  border-radius: 10px;
 }
 
 .flip-card {
@@ -998,6 +997,7 @@ body {
   height: var(--card-h);
   line-height: var(--card-h);
   text-align: center;
+  transform: translateY(0.155em); /* Special Elite digits sit ~0.155em high in the line box */
 }
 
 .flip-top {
