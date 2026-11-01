@@ -83,7 +83,9 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
 
   onMessage((data) => {
     if (data.type === 'show') {
-      if (answerButtons[data.index]) answerButtons[data.index].classList.add('visible');
+      const btn = answerButtons[data.index];
+      // Wait a frame so a just-created answer still animates in
+      if (btn) requestAnimationFrame(() => requestAnimationFrame(() => btn.classList.add('visible')));
       return;
     }
     if (data.type === 'open') {

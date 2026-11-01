@@ -182,12 +182,12 @@
 
     const css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = `games/${gameId}/controller.css`;
+    css.href = `games/${gameId}/controller.css?v=${Date.now()}`; // never use a stale cached controller
     document.head.appendChild(css);
 
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = `games/${gameId}/controller.js`;
+      script.src = `games/${gameId}/controller.js?v=${Date.now()}`;
       script.onload = () => (controllers[gameId] ? resolve() : reject(new Error('Controller did not register')));
       script.onerror = reject;
       document.body.appendChild(script);
