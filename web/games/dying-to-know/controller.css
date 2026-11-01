@@ -158,27 +158,38 @@ body[data-game='dying-to-know'] {
 }
 
 .dtk-start {
+  /* Same as "EVERYBODY'S IN" on the TV lobby */
   appearance: none;
-  width: 100%;
-  max-width: 420px;
-  padding: 18px;
-  border: 2px solid #efe6d2;
-  border-radius: 10px;
-  background: rgba(12, 9, 4, 0.85);
-  color: #efe6d2;
-  font: inherit;
-  font-size: 22px;
+  padding: 18px 12px;
+  border: 0;
+  background: none;
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: 26px;
+  font-weight: bold;
+  text-decoration: underline;
   text-transform: uppercase;
   letter-spacing: 1px;
+  color: #bd3131;
+  text-shadow: -30px 10px 0 rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.95);
   cursor: pointer;
-  transition: transform 0.1s, opacity 0.2s;
-}
-
-.dtk-start:active {
-  transform: scale(0.98);
+  animation: dtk-pulse 2.4s ease-in-out infinite alternate;
 }
 
 .dtk-start:disabled {
   opacity: 0.4;
+  animation: none;
   cursor: default;
+}
+
+@keyframes dtk-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.03);
+    text-shadow: 0 0 12px rgba(189, 49, 49, 0.5), 0 2px 8px rgba(0, 0, 0, 0.95);
+  }
 }
