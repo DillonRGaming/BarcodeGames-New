@@ -100,7 +100,17 @@ class GameManager {
 
     this.net = new RoomHost({ game: 'dying-to-know', maxPlayers: MAX_PLAYERS });
     this.playersById = new Map(); // room player id → Player
-    this.net.on('code', (code) => this.setRoomCode(code));
+    this.net.on('code', (code) => {
+      this.setRoomCode(code);
+      this.phoneState = { type: 'lobby' };
+    });
+    this.net.on('message', (roomId, data) => {
+      // The VIP starts the game from their phone
+      if (data.type === 'start') {
+        const player = this.playersById.get(roomId);
+        if (player && player.isVip && this.gameState === 'LOBBY') this.startLobbyGame();
+      }
+    });
     this.net.on('join', (info) => this.addPlayer(info));
     this.net.on('leave', (roomId) => {
       // Leaving in the lobby removes you; once the game has started you can reconnect
@@ -313,7 +323,10 @@ class GameManager {
     this.isIntroRunning = true;
     this.isIntroSkipped = false;
     this.gameState = 'INTRO';
-    if (this.net) this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
+    if (this.net) {
+      this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
+      this.setPhoneState({ type: 'wait' });
+    }
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.remove('hidden');
 
@@ -914,10 +927,10 @@ class GameManager {
     const K_END = isLineup ? 0.72 : 1.0;
 
     // 3. Stagger trajectories smoothly (Synchronous - zero frame gap!)
+    // Stagger column by column through the 2x4 grid (top then bottom of each column)
     const n = this.players.length;
-    const cols = Math.min(4, Math.ceil(n / 2));
     const order = [];
-    for (let c = 0; c < cols; c++) {
+    for (let c = 0; c < 4; c++) {
       if (c < n) order.push(c);
       if (c + 4 < n) order.push(c + 4);
     }

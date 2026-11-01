@@ -21,6 +21,8 @@ body[data-game='dying-to-know'] {
 .dtk-header {
   display: flex;
   justify-content: center;
+  align-items: baseline;
+  gap: 10px;
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
   background-color: var(--player-color, #0b0805);
   background-image: url('assets/knit.svg');
@@ -61,7 +63,8 @@ body[data-game='dying-to-know'] {
   color: #120d08;
 }
 
-.dtk-name {
+.dtk-name,
+.dtk-vip {
   position: relative;
   z-index: 1;
   font-size: 26px;
@@ -136,4 +139,47 @@ body[data-game='dying-to-know'] {
   background: #efe6d2;
   color: #15110a;
   font-size: 18px;
+}
+
+.dtk-vip {
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: #efe6d2;
+}
+
+.dtk-header.has-color .dtk-vip {
+  color: #120d08;
+}
+
+/* VIP start button */
+.dtk-footer {
+  padding: 0 16px max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+}
+
+.dtk-start {
+  appearance: none;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px;
+  border: 2px solid #efe6d2;
+  border-radius: 10px;
+  background: rgba(12, 9, 4, 0.85);
+  color: #efe6d2;
+  font: inherit;
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.2s;
+}
+
+.dtk-start:active {
+  transform: scale(0.98);
+}
+
+.dtk-start:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

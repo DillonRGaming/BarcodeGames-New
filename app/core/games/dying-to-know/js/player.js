@@ -105,20 +105,6 @@ class Player {
     this.backImg.className = 'layer-slice face-back';
     this.token3D.appendChild(this.backImg);
 
-    // VIP Badge - Front Face
-    this.vipBadge = document.createElement('div');
-    this.vipBadge.className = 'vip-badge vip-front';
-    this.vipBadge.textContent = 'VIP';
-    this.vipBadge.style.display = this.isVip ? 'block' : 'none';
-    this.token3D.appendChild(this.vipBadge);
-
-    // VIP Badge - Back Face (Dead)
-    this.vipBadgeBack = document.createElement('div');
-    this.vipBadgeBack.className = 'vip-badge vip-back';
-    this.vipBadgeBack.textContent = 'VIP';
-    this.vipBadgeBack.style.display = this.isVip ? 'block' : 'none';
-    this.token3D.appendChild(this.vipBadgeBack);
-
     this.mainSlot.appendChild(this.token3D);
     this.wrapper.appendChild(this.shadowSlot);
     this.wrapper.appendChild(this.mainSlot);
@@ -126,8 +112,17 @@ class Player {
     // Floating Player Nameplate (Inside wrapper so it moves with the player)
     this.nameEl = document.createElement('div');
     this.nameEl.className = 'player-name';
-    this.nameEl.textContent = this.name;
+    this.nameTextEl = document.createElement('span');
+    this.nameTextEl.textContent = this.name;
+    this.nameEl.appendChild(this.nameTextEl);
     this.nameEl.style.color = this.nameColor;
+
+    // VIP tag sits above the name and moves/tilts with it
+    this.vipBadge = document.createElement('span');
+    this.vipBadge.className = 'player-vip';
+    this.vipBadge.textContent = 'VIP';
+    this.vipBadge.style.display = this.isVip ? 'block' : 'none';
+    this.nameEl.appendChild(this.vipBadge);
     this.nameEl.style.setProperty('--name-rot', `${this.nameTilt}deg`);
     this.nameEl.style.display = this.name ? 'block' : 'none';
     this.wrapper.appendChild(this.nameEl);
@@ -213,7 +208,7 @@ class Player {
     if (tilt !== null) this.nameTilt = tilt;
 
     if (this.nameEl) {
-      this.nameEl.textContent = this.name;
+      this.nameTextEl.textContent = this.name;
       this.nameEl.style.color = this.nameColor;
       this.nameEl.style.setProperty('--name-rot', `${this.nameTilt}deg`);
       this.nameEl.style.display = this.name ? 'block' : 'none';
@@ -224,9 +219,6 @@ class Player {
     this.isVip = isVip;
     if (this.vipBadge) {
       this.vipBadge.style.display = isVip ? 'block' : 'none';
-    }
-    if (this.vipBadgeBack) {
-      this.vipBadgeBack.style.display = isVip ? 'block' : 'none';
     }
   }
 

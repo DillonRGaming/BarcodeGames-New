@@ -3,12 +3,13 @@
  *
  * Messages from the host app (data):
  *   { type: 'profile', color, letter, vip }  how this player looks in the game
- *   { type: 'lobby' }                         waiting for the game to start
+ *   { type: 'lobby' }                         waiting for the game to start (VIP sees the start button)
  *   { type: 'question', answers: [4 strings] } show answer buttons
  *   { type: 'reveal', correct: boolean }      after the timer runs out
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
  *
  * Messages to the host:
+ *   { type: 'start' }                         VIP pressed "Everybody's in"
  *   { type: 'answer', index }                 0-based answer the player picked
  */
 
@@ -17,13 +18,32 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     <div class="dtk">
       <header class="dtk-header">
         <span class="dtk-name"></span>
+        <span class="dtk-vip hidden">VIP</span>
       </header>
       <section class="dtk-body"></section>
+      <footer class="dtk-footer hidden">
+        <button class="dtk-start" type="button">Everybody's in</button>
+      </footer>
     </div>
   `;
   root.querySelector('.dtk-name').textContent = player.name;
-  const body = root.querySelector('.dtk-body');
   const header = root.querySelector('.dtk-header');
+  const body = root.querySelector('.dtk-body');
+  const vipTag = root.querySelector('.dtk-vip');
+  const footer = root.querySelector('.dtk-footer');
+  const startBtn = root.querySelector('.dtk-start');
+
+  let isVip = false;
+  let screen = 'lobby';
+
+  function updateFooter() {
+    footer.classList.toggle('hidden', !(isVip && screen === 'lobby'));
+  }
+
+  startBtn.addEventListener('click', () => {
+    send({ type: 'start' });
+    startBtn.disabled = true;
+  });
 
   function showMessage(title = '') {
     body.innerHTML = '<h2 class="dtk-title"></h2>';
@@ -51,12 +71,19 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   }
 
   onMessage((data) => {
+    if (data.type === 'profile') {
+      header.style.setProperty('--player-color', data.color);
+      header.classList.add('has-color');
+      isVip = !!data.vip;
+      vipTag.classList.toggle('hidden', !isVip);
+      updateFooter();
+      return;
+    }
+
+    screen = data.type;
     switch (data.type) {
-      case 'profile':
-        header.style.setProperty('--player-color', data.color);
-        header.classList.add('has-color');
-        break;
       case 'lobby':
+        startBtn.disabled = false;
         showMessage();
         break;
       case 'question':
@@ -69,6 +96,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         showMessage(data.text);
         break;
     }
+    updateFooter();
   });
 
   showMessage();
