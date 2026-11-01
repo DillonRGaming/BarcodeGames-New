@@ -126,15 +126,115 @@ body {
 /* 1. Grid Mode (Classic 2x4 Layout) */
 .grid.grid-layout {
   display: grid;
-  grid-template-columns: repeat(4, auto);
-  grid-template-rows: repeat(2, auto);
-  column-gap: clamp(30px, 4.5vw, 65px);
+  grid-template-columns: repeat(24, 1fr);
+  grid-auto-rows: auto;
+  column-gap: 0;
   row-gap: clamp(20px, 3.5vh, 45px);
   align-items: center;
   justify-items: center;
   padding: 20px;
   width: auto;
   height: auto;
+}
+
+/* Rows by player count: 1 | 2 | 3 | 2+2 | 3+2 | 3+3 | 4+3 | 4+4 (24-col track, short last row centered) */
+.grid.grid-layout .letter-slot { grid-column: span 6; margin-inline: clamp(15px, 2.25vw, 32.5px); }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(-n+3)) { grid-template-columns: repeat(var(--cols), 1fr); }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(1)) { --cols: 1; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(2)) { --cols: 2; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(3)) { --cols: 3; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(-n+3)) .letter-slot { grid-column: auto; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(4)) .letter-slot { grid-column: span 12; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(n+5):nth-child(-n+6)) .letter-slot { grid-column: span 8; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(5)) .letter-slot:nth-child(4) { grid-column: 5 / span 8; }
+.grid.grid-layout:has(> .letter-slot:last-child:nth-child(7)) .letter-slot:nth-child(5) { grid-column: 4 / span 6; }
+
+/* 3. Scoreboard: one row, richest on the left, well below centre */
+.grid.scoreboard {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(24px, 3.6vw, 64px);
+  top: 24vh; /* .grid is position: relative */
+  width: auto;
+  height: auto;
+}
+
+.grid.scoreboard .letter-slot {
+  order: var(--rank, 0);
+}
+
+.player-money {
+  position: absolute;
+  bottom: calc(100% + 54px);
+  left: 50%;
+  width: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 12;
+}
+
+.player-money.visible {
+  opacity: 1;
+}
+
+/* Rides the tip of the line: the money, then the T's crossbar */
+.money-cap {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+.money-text {
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(22px, 2vw, 32px);
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+  text-shadow: 2px 2px 0 #000000;
+  margin-bottom: 6px;
+}
+
+.player-money.down .money-text { color: #f87171; }
+
+.money-crossbar {
+  width: 34px;
+  height: 5px;
+  background: #e8e6df;
+  filter: url(#chalk);
+  opacity: 0.92;
+}
+
+/* The chalk stalk, notched every £100 (--groove); it stays still while clip-path reveals it */
+.money-bar {
+  position: absolute;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  height: 0;
+  background: #e8e6df;
+  filter: url(#chalk);
+  opacity: 0.92;
+  clip-path: inset(100% -10px 0 -10px);
+}
+
+.money-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+  background: repeating-linear-gradient(to top,
+    transparent 0,
+    transparent calc(var(--groove, 40px) - 3px),
+    #e8e6df calc(var(--groove, 40px) - 3px),
+    #e8e6df var(--groove, 40px));
+  -webkit-mask: linear-gradient(to right, #000 0 5px, transparent 5px 11px, #000 11px);
+  mask: linear-gradient(to right, #000 0 5px, transparent 5px 11px, #000 11px);
 }
 
 /* 2. Lineup Mode (Top Row) */
@@ -179,6 +279,11 @@ body {
 .player-result-badge.visible {
   transform: translateX(-50%) scale(1);
   opacity: 1;
+}
+
+.player-result-badge.visible.fade-out {
+  opacity: 0;
+  transition: opacity 0.4s ease;
 }
 
 .player-result-badge.correct {
@@ -531,7 +636,10 @@ body {
   justify-content: center;
   pointer-events: none;
   z-index: 1;
-  transform-style: preserve-3d;
+  /* Flatten the shadow onto a plane well behind the letter: z-index means nothing in 3D,
+     so at z=0 the back half of a turning letter would sink behind it */
+  transform-style: flat;
+  transform: translateZ(-40px);
 }
 
 .letter-shadow {
@@ -609,6 +717,7 @@ body {
 /* Names hidden while the lights are out */
 .grid.eyes-only .player-name {
   opacity: 0 !important;
+  transition: none; /* gone the instant the lights cut */
 }
 
 /* =========================================
@@ -1151,4 +1260,193 @@ body {
 
 .lobby-code-badge .code-value.copied {
   transform: scale(1.08);
+}
+
+/* =========================================
+   Lobby Slot Cards (empty spots)
+   ========================================= */
+
+.slot-cards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.slot-cards.hidden {
+  opacity: 0;
+}
+
+.slot-card {
+  position: absolute;
+  margin: calc(62.5px - 0.625em) 0 0 calc(62.5px - 0.625em); /* centred on the 125px player spot */
+  font-size: clamp(34px, 3.5vw, 54px);
+  transition: opacity 0.9s ease, scale 0.9s ease;
+}
+
+.slot-card .answer-num,
+.slot-card .card-shadow {
+  position: relative;
+  font-size: 1em;
+}
+
+/* Same as the letters' shadows: a flat black copy of the shape, smaller, off to the left and down */
+.slot-card .card-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1.25em;
+  height: 1.25em;
+  background: #000000 !important;
+  opacity: 0.38;
+  translate: -0.85em 0.24em; /* letters: 52px left, 15px down on a 125px spot, scaled to the card */
+  scale: 0.74;
+}
+
+.slot-card.taken {
+  opacity: 0;
+  scale: 0.7;
+}
+
+/* Folded corner: the corner is cut away and a darker flap sits under the fold */
+.slot-card.folded .answer-num::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30%;
+  height: 30%;
+  background: rgba(0, 0, 0, 0.3);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.slot-card:nth-child(1) { left: 13.5vw; top: 19vh; }
+.slot-card:nth-child(1) .answer-num,
+.slot-card:nth-child(1) .card-shadow {
+  background-color: #2f7cf6; color: #ffffff; transform: rotate(-6deg);
+  clip-path: polygon(3% 4%, 25% 0%, 48% 4%, 70% 1%, 100% 30%, 97% 52%, 100% 76%, 97% 97%, 75% 100%, 50% 96%, 25% 100%, 2% 97%, 0% 72%, 4% 48%, 0% 24%);
+}
+
+.slot-card:nth-child(2) { left: 20vw; top: 46vh; }
+.slot-card:nth-child(2) .answer-num,
+.slot-card:nth-child(2) .card-shadow {
+  background-color: #f0413d; color: #ffffff; transform: rotate(4deg);
+  clip-path: polygon(0% 3%, 18% 6%, 37% 0%, 58% 5%, 79% 1%, 97% 4%, 100% 27%, 95% 49%, 100% 73%, 97% 97%, 76% 94%, 57% 100%, 35% 95%, 16% 100%, 2% 96%, 5% 72%, 0% 48%, 4% 25%);
+}
+
+.slot-card:nth-child(3) { left: 6.5vw; top: 60vh; }
+.slot-card:nth-child(3) .answer-num,
+.slot-card:nth-child(3) .card-shadow {
+  background-color: #2fbf5b; color: #ffffff; transform: rotate(-3deg);
+  clip-path: polygon(5% 0%, 26% 5%, 47% 1%, 68% 6%, 90% 0%, 100% 9%, 96% 33%, 100% 56%, 97% 80%, 100% 100%, 81% 95%, 60% 100%, 39% 96%, 19% 100%, 0% 95%, 3% 71%, 0% 46%, 4% 21%);
+}
+
+.slot-card:nth-child(4) { left: 41.5vw; top: 62vh; }
+.slot-card:nth-child(4) .answer-num,
+.slot-card:nth-child(4) .card-shadow {
+  background-color: #ffc21a; color: #1b1b1b; transform: rotate(5deg);
+  clip-path: polygon(3% 4%, 25% 0%, 48% 4%, 70% 1%, 100% 30%, 97% 52%, 100% 76%, 97% 97%, 75% 100%, 50% 96%, 25% 100%, 2% 97%, 0% 72%, 4% 48%, 0% 24%);
+}
+
+.slot-card:nth-child(5) { left: 56vw; top: 27vh; }
+.slot-card:nth-child(5) .answer-num,
+.slot-card:nth-child(5) .card-shadow {
+  background-color: #9a5cf0; color: #ffffff; transform: rotate(-6deg);
+  clip-path: polygon(3% 6%, 22% 0%, 41% 4%, 63% 1%, 84% 5%, 100% 2%, 97% 24%, 100% 47%, 96% 70%, 99% 94%, 78% 100%, 55% 96%, 33% 100%, 12% 97%, 0% 100%, 4% 76%, 0% 52%, 3% 29%);
+}
+
+.slot-card:nth-child(6) { left: 70.5vw; top: 37vh; }
+.slot-card:nth-child(6) .answer-num,
+.slot-card:nth-child(6) .card-shadow {
+  background-color: #ff7a1f; color: #ffffff; transform: rotate(4deg);
+  clip-path: polygon(0% 3%, 18% 6%, 37% 0%, 58% 5%, 79% 1%, 97% 4%, 100% 27%, 95% 49%, 100% 73%, 97% 97%, 76% 94%, 57% 100%, 35% 95%, 16% 100%, 2% 96%, 5% 72%, 0% 48%, 4% 25%);
+}
+
+.slot-card:nth-child(7) { left: 77.5vw; top: 14vh; }
+.slot-card:nth-child(7) .answer-num,
+.slot-card:nth-child(7) .card-shadow {
+  background-color: #f25aa8; color: #ffffff; transform: rotate(-3deg);
+  clip-path: polygon(3% 4%, 25% 0%, 48% 4%, 70% 1%, 100% 30%, 97% 52%, 100% 76%, 97% 97%, 75% 100%, 50% 96%, 25% 100%, 2% 97%, 0% 72%, 4% 48%, 0% 24%);
+}
+
+.slot-card:nth-child(8) { left: 82.5vw; top: 62vh; }
+.slot-card:nth-child(8) .answer-num,
+.slot-card:nth-child(8) .card-shadow {
+  background-color: #14b8aa; color: #ffffff; transform: rotate(5deg);
+  clip-path: polygon(0% 5%, 21% 1%, 43% 6%, 64% 0%, 85% 4%, 100% 0%, 97% 22%, 100% 45%, 95% 68%, 100% 91%, 83% 100%, 61% 95%, 40% 100%, 20% 96%, 3% 100%, 0% 78%, 5% 55%, 0% 30%);
+}
+
+/* =========================================
+   Player Spawn Glow
+   ========================================= */
+
+.spawn-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 125px;
+  width: auto;
+  max-width: 135px;
+  /* In front of the dead face in 3D (z-index is ignored once the letter stops fading in and goes
+     back to real 3D); the scale undoes the perspective growth from moving it forward */
+  transform: translate(-50%, -50%) translateZ(20px) scale(0.98);
+  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  /* glow in, hold, then slowly away; keyframes so it always starts from 0, even on the very first frame */
+  animation: spawn-glow 3.4s ease-in-out forwards; /* fully gone before the revive spin (3.6s) */
+}
+
+@keyframes spawn-glow {
+  0%   { opacity: 0; }
+  45%  { opacity: 0.5; }
+  60%  { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+
+.letter-wrapper.spawning .main-slot,
+.letter-wrapper.spawning .shadow-slot,
+.letter-wrapper.spawning .player-name {
+  opacity: 0;
+}
+
+.letter-wrapper .main-slot,
+.letter-wrapper .shadow-slot {
+  transition: opacity 1s ease;
+}
+
+/* =========================================
+   Start Countdown (3, 2, 1)
+   ========================================= */
+
+.lobby-start-prompt.hidden {
+  display: none;
+}
+
+.start-countdown {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: "Special Elite", cursive, sans-serif;
+  font-size: clamp(120px, 16vw, 260px);
+  font-weight: bold;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: -30px 10px 0 rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+  user-select: none;
+  z-index: 40;
+}
+
+.start-countdown.slam {
+  animation: countdown-slam 1.15s ease-out forwards;
+}
+
+@keyframes countdown-slam {
+  0%   { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  12%  { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  80%  { transform: translate(-50%, -50%) scale(0.96); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
 }

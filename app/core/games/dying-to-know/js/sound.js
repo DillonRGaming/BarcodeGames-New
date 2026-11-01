@@ -348,7 +348,9 @@ class SoundController {
 
   playTick(volume = 0.85) {
     try {
-      const tick = new Audio('assets/sound/tick.mp3');
+      // tick.mp3 is a 16s run of ticks; these are one tick and one tock cut from it, alternating
+      this.tickTock = !this.tickTock;
+      const tick = new Audio(this.tickTock ? 'assets/sound/tick-single.mp3' : 'assets/sound/tock-single.mp3');
       tick.volume = volume;
       tick.play().catch(() => { });
     } catch (e) { }
@@ -463,6 +465,15 @@ class SoundController {
     loudBuild.play().catch(() => { });
   }
 
+  /** chime.mp3 pitched by rate (1 = original); lower than 1 is deeper */
+  playChime(rate = 1, volume = 0.7) {
+    const chime = new Audio('assets/sound/chime.mp3');
+    chime.preservesPitch = false;
+    chime.playbackRate = Math.min(4, Math.max(0.25, rate));
+    chime.volume = volume;
+    chime.play().catch(() => { });
+  }
+
   playLight() {
     const light = new Audio('assets/sound/light.mp3');
     light.play().catch(() => { });
@@ -486,9 +497,19 @@ class SoundController {
     }
   }
 
+  _introAudio(audio) {
+    (this.introAudios = this.introAudios || []).push(audio);
+    return audio;
+  }
+
+  stopIntroSounds() {
+    (this.introAudios || []).forEach((a) => a.pause());
+    this.introAudios = [];
+  }
+
   playIntroRing(cutoffSeconds = 3.35) {
     return new Promise((resolve) => {
-      const ring = new Audio('assets/sound/ring.mp3');
+      const ring = this._introAudio(new Audio('assets/sound/ring.mp3'));
       ring.volume = 0.95;
       let finished = false;
       const done = () => {
@@ -511,7 +532,7 @@ class SoundController {
 
   playIntroPickup() {
     return new Promise((resolve) => {
-      const pickup = new Audio('assets/sound/pickup.mp3');
+      const pickup = this._introAudio(new Audio('assets/sound/pickup.mp3'));
       pickup.volume = 1.0;
       pickup.onended = () => resolve();
       pickup.onerror = () => resolve();
@@ -521,7 +542,7 @@ class SoundController {
 
   playIntroGibberish(cutoffSeconds = 5.25, onBuildStart = null) {
     return new Promise((resolve) => {
-      const gibberish = new Audio('assets/sound/gibberish.mp3');
+      const gibberish = this._introAudio(new Audio('assets/sound/gibberish.mp3'));
       gibberish.volume = 1.0;
       let finished = false;
       let buildTriggered = false;
@@ -570,7 +591,7 @@ class SoundController {
   }
 
   playIntroScream() {
-    const scream = new Audio('assets/sound/scream.mp3');
+    const scream = this._introAudio(new Audio('assets/sound/scream.mp3'));
     scream.volume = 1.0;
     scream.play().catch(() => { });
   }

@@ -12,6 +12,16 @@
 </head>
 
 <body>
+  <!-- Rough, grainy edges for the scoreboard's chalk bars -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="chalk" x="-50%" y="-5%" width="200%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="4" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" result="rough" />
+      <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="9" result="grain" />
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.25" result="holes" />
+      <feComposite in="rough" in2="holes" operator="in" />
+    </filter>
+  </svg>
   <!-- Ambient & Loop Audio -->
   <audio id="lampAudio" src="assets/sound/lamp.mp3" loop preload="auto"></audio>
   <audio id="horrorAudio" src="assets/sound/horror.mp3" loop preload="auto"></audio>
@@ -26,6 +36,17 @@
 
   <!-- Character Token Stage -->
   <div class="grid-container">
+    <!-- Empty lobby spots: numbered cards, each hidden once a player takes that spot -->
+    <div class="slot-cards" id="slotCards">
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">1</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">2</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">3</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">4</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">5</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">6</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">7</span></span>
+      <span class="slot-card"><span class="card-shadow"></span><span class="answer-num">8</span></span>
+    </div>
     <div class="grid lobby" id="letterGrid"></div>
   </div>
 
@@ -52,7 +73,13 @@
     <div class="lobby-start-prompt" id="lobbyStartPrompt">
       Press <span class="highlight">EVERYBODY'S IN</span> to start
     </div>
+    <div class="lobby-start-prompt hidden" id="lobbyCancelPrompt">
+      <span class="highlight">CANCEL</span>
+    </div>
   </div>
+
+  <!-- 3, 2, 1 before the game starts -->
+  <div class="start-countdown" id="startCountdown"></div>
 
   <!-- Fullscreen Atmosphere Filters for Lobby -->
   <div id="lobbyAtmosphere" class="lobby-atmosphere">

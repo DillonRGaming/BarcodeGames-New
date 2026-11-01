@@ -60,6 +60,7 @@ class Player {
     this.isExtrusionLoaded = false;
     this.tiltBlend = 0.0;
     this.edgeSlices = [];
+    this.deadEdgeSlices = [];
 
     this._createDOM();
     this._buildExtrusionSlices();
@@ -127,6 +128,23 @@ class Player {
     this.nameEl.style.display = this.name ? 'block' : 'none';
     this.wrapper.appendChild(this.nameEl);
 
+    // Money shown above the name on the scoreboard
+    this.money = 100;
+    // Money shown on top of a T-shaped bar that rises with it
+    this.moneyEl = document.createElement('div');
+    this.moneyEl.className = 'player-money';
+    this.moneyBarEl = document.createElement('div');
+    this.moneyBarEl.className = 'money-bar';
+    this.moneyCapEl = document.createElement('div');
+    this.moneyCapEl.className = 'money-cap';
+    this.moneyTextEl = document.createElement('span');
+    this.moneyTextEl.className = 'money-text';
+    const crossbar = document.createElement('div');
+    crossbar.className = 'money-crossbar';
+    this.moneyCapEl.append(this.moneyTextEl, crossbar);
+    this.moneyEl.append(this.moneyBarEl, this.moneyCapEl);
+    this.wrapper.appendChild(this.moneyEl);
+
     // Result Badge (Tick / X underneath player)
     this.resultBadgeEl = document.createElement('div');
     this.resultBadgeEl.className = 'player-result-badge';
@@ -144,20 +162,17 @@ class Player {
     this.scaleElapsed = 0;
     this.scaleStart = 1.0;
 
-    // Hover effect via wrapper transition
+    // Hover: the letter lifts toward you; its shadow stays put on the wall behind
     this.slot.addEventListener('mouseenter', () => {
       if (!this.inFlight && this.isVisible) {
-        const s = this.currentScale * 1.06;
-        this.wrapper.style.transform = `scale(${s.toFixed(4)})`;
-        this.wrapper.style.transition = 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        this.mainSlot.style.transition = 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 1s ease'; // keep the spawn fade-in
+        this.mainSlot.style.transform = 'scale(1.06)';
       }
     });
 
     this.slot.addEventListener('mouseleave', () => {
-      if (!this.inFlight && this.isVisible) {
-        this.wrapper.style.transform = (this.currentScale === 1.0) ? '' : `scale(${this.currentScale.toFixed(4)})`;
-        this.wrapper.style.transition = 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)';
-      }
+      this.mainSlot.style.transition = 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 1s ease'; // keep the spawn fade-in
+      this.mainSlot.style.transform = '';
     });
 
     // Click handler for flip toggle
@@ -181,10 +196,48 @@ class Player {
         slice.style.transform = `translateZ(${z.toFixed(1)}px)`;
         fragment.appendChild(slice);
         this.edgeSlices.push(slice);
+
+        // Matching dead-letter layer, mirrored (it's only seen from behind) and hidden until a spin needs it
+        if (this.textures.deadEdge) {
+          const dead = document.createElement('img');
+          dead.src = this.textures.deadEdge;
+          dead.alt = '';
+          dead.className = 'layer-slice edge-slice';
+          dead.style.transform = `translateZ(${z.toFixed(1)}px) scaleX(-1)`;
+          dead.style.opacity = '0';
+          fragment.appendChild(dead);
+          this.deadEdgeSlices.push(dead);
+        }
       }
       this.token3D.insertBefore(fragment, this.frontImg);
       this.isExtrusionLoaded = true;
     });
+  }
+
+  /** Swap the 3D side layers between the alive and dead letter */
+  setEdgeKind(kind) {
+    if (this.edgeKind === kind) return;
+    this.edgeKind = kind;
+    if (kind !== 'dead') this.deadEdgeSlices.forEach((s) => { s.style.opacity = '0'; });
+  }
+
+  /**
+   * Side layers through a death spin at death-time `dt` (revive passes the mirrored time):
+   * alive sides until the token is edge-on, then dead sides so it never goes paper-thin,
+   * which fade away once it has settled facing back.
+   */
+  _edgesForDeathTime(time) {
+    const EDGE_ON = 0.7;
+    this.setEdgeKind(time < EDGE_ON ? 'alive' : 'dead');
+    const deadOp = 0.68 * (1 - Math.min(1, Math.max(0, (time - 1.15) / 0.3)));
+    // The dead face (and its baked glow) eases in after edge-on instead of popping at the cut-off
+    const faceT = Math.min(1, Math.max(0, (time - EDGE_ON) / 0.35));
+    this.backImg.style.opacity = (0.68 * faceT).toFixed(2);
+
+    const dead = time >= EDGE_ON && this.deadEdgeSlices.length;
+    // Both stacks already exist; just show one, so nothing reloads mid-spin
+    this.edgeSlices.forEach((s) => { s.style.opacity = dead ? '0' : '1'; });
+    this.deadEdgeSlices.forEach((s) => { s.style.opacity = dead ? deadOp.toFixed(2) : '0'; });
   }
 
   updateTextures(textures) {
@@ -208,6 +261,7 @@ class Player {
     if (tilt !== null) this.nameTilt = tilt;
 
     if (this.nameEl) {
+      this.scrambleToken = null; // stop any name scramble
       this.nameTextEl.textContent = this.name;
       this.nameEl.style.color = this.nameColor;
       this.nameEl.style.setProperty('--name-rot', `${this.nameTilt}deg`);
@@ -278,18 +332,73 @@ class Player {
     this.frontImg.src = this.textures.front;
   }
 
+  /** Show the dead face, straight on, with no spin (a revive spin follows) */
+  joinDead() {
+    this.state = 'DEAD';
+    this.isFlipping = false;
+    this.shadowImg.src = this.textures.deadShadow;
+  }
+
+  /** Glowing silhouette in first, the letter fades in beneath it, then the glow slowly goes */
+  spawnGlow() {
+    const glow = document.createElement('img');
+    glow.className = 'spawn-glow';
+    glow.src = this.textures.dead;
+    glow.alt = '';
+    this.wrapper.appendChild(glow);
+    this.wrapper.classList.add('spawning');
+    setTimeout(() => this.wrapper.classList.remove('spawning'), 1500);
+    glow.addEventListener('animationend', () => glow.remove());
+  }
+
+  /**
+   * Name starts as XXX (same length), then each letter cycles through random letters and lands on
+   * the real one, left to right; each starts before the one before it has landed.
+   */
+  scrambleName(delay = 0) {
+    const name = this.name || '';
+    const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const SPIN_MS = 1400;   // how long each letter cycles
+    const STAGGER_MS = 320; // next letter starts this long after the one before
+    const STEP_MS = 80;     // how often a cycling letter changes
+    const isLetter = (ch) => /[a-z]/i.test(ch);
+    this.nameTextEl.textContent = name.replace(/[^\s]/g, 'X');
+
+    const token = (this.scrambleToken = {});
+    const start = performance.now() + delay;
+    const tick = () => {
+      if (this.scrambleToken !== token) return; // a newer scramble or rename took over
+      const now = performance.now();
+      let done = true;
+      const out = [...name].map((ch, i) => {
+        if (/\s/.test(ch)) return ch;
+        const t = now - (start + i * STAGGER_MS);
+        if (t >= SPIN_MS) return ch;
+        done = false;
+        if (t < 0) return 'X';
+        const step = Math.floor(t / STEP_MS);
+        const pick = (i * 7 + step * 13 + Math.floor(Math.random() * 26)) % 26;
+        const c = POOL[pick];
+        return isLetter(ch) && ch === ch.toLowerCase() ? c.toLowerCase() : c;
+      });
+      this.nameTextEl.textContent = out.join('');
+      if (!done) setTimeout(tick, STEP_MS);
+    };
+    setTimeout(tick, Math.max(0, delay));
+  }
+
   startReviveSpin() {
     this.isFlipping = true;
     this.state = 'REVIVING';
     this.spinType = 'REVIVE';
-    this.spinDuration = 0.85;
+    this.spinDuration = 1.5; // same as the death spin
     this.spinTimer = 0;
     this.spinProgress = 0;
     this.spinSoundTriggers = { swapShadow: false };
 
-    // Reset edge slices visibility
-    this.edgeSlices.forEach((s) => { s.style.opacity = '1'; });
-    this.frontImg.style.opacity = '1';
+    // Alive face and edges stay hidden until the spin passes edge-on
+    this.edgeSlices.forEach((s) => { s.style.opacity = '0'; });
+    this.frontImg.style.opacity = '0';
   }
 
   /**
@@ -359,6 +468,25 @@ class Player {
       this.wrapper.style.transform = `scale(${targetS.toFixed(4)})`;
       this.wrapper.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease';
     }
+  }
+
+  setMoneyText(amount) {
+    this.moneyTextEl.textContent = `${amount < 0 ? '-' : ''}£${Math.abs(Math.round(amount))}`;
+  }
+
+  /** The full chalk line is drawn at its final length, then revealed from the bottom */
+  setMoneyBarLength(px) {
+    this.moneyBarEl.style.height = `${Math.max(0, px).toFixed(1)}px`;
+  }
+
+  setMoneyBar(px) {
+    const d = `${Math.max(0, px).toFixed(1)}px`;
+    this.moneyBarEl.style.clipPath = `inset(calc(100% - ${d}) -10px 0 -10px)`;
+    this.moneyCapEl.style.bottom = d;
+  }
+
+  fadeResultBadge() {
+    if (this.resultBadgeEl) this.resultBadgeEl.classList.add('fade-out');
   }
 
   clearResult(baseScale = 0.72) {
@@ -461,13 +589,11 @@ class Player {
         if (this.onStateChange) this.onStateChange(this, 'SOUND_WHOOSH');
       }
       if (this.spinTimer >= 0.4) {
-        // Fade the 3D edge slices (cut from the alive letter) before the token passes edge-on (~0.7s),
-        // so the alive letter never shows through mirrored from behind
+        // Fade the alive face out before the token passes edge-on (~0.7s)
         const fadeT = Math.min(1, Math.max(0, (this.spinTimer - 0.4) / 0.25));
-        const op = (1 - fadeT).toFixed(2);
-        this.edgeSlices.forEach((s) => { s.style.opacity = op; });
-        this.frontImg.style.opacity = op;
+        this.frontImg.style.opacity = (1 - fadeT).toFixed(2);
       }
+      this._edgesForDeathTime(this.spinTimer);
       if (this.spinTimer >= 0.75 && !this.spinSoundTriggers.ghost) {
         this.spinSoundTriggers.ghost = true;
         if (this.onStateChange) this.onStateChange(this, 'SOUND_GHOST');
@@ -492,7 +618,9 @@ class Player {
       if (t >= 1) {
         this.state = 'DEAD';
         this.isFlipping = false;
+        this.backImg.style.opacity = '';
         this.edgeSlices.forEach((s) => { s.style.opacity = '0'; });
+        this.setEdgeKind('alive');
         this.frontImg.style.opacity = '0';
       }
     } else if (this.state === 'DEAD') {
@@ -504,23 +632,23 @@ class Player {
       this.frontImg.style.opacity = '0';
       this.shadowImg.style.opacity = '0.18';
     } else if (this.state === 'REVIVING') {
+      // The death spin played backwards: same length, same rotation (180° back to 24°), and the
+      // alive face and edges only fade in once the token is past edge-on, so they never show over the dead face
       this.spinTimer += dt;
       const t = Math.min(1, this.spinTimer / this.spinDuration);
       const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const deathTime = this.spinDuration - this.spinTimer; // where the death spin would be
 
-      if (this.spinTimer >= 0.425 && !this.spinSoundTriggers.swapShadow) {
+      if (deathTime <= 0.75 && !this.spinSoundTriggers.swapShadow) {
         this.spinSoundTriggers.swapShadow = true;
         this.shadowImg.src = this.textures.aliveShadow;
       }
 
-      // Fade in front and edge slices
-      const fadeT = Math.min(1, this.spinTimer / 0.5);
-      const op = fadeT.toFixed(2);
-      this.edgeSlices.forEach((s) => { s.style.opacity = op; });
-      this.frontImg.style.opacity = op;
+      const fadeT = Math.min(1, Math.max(0, (deathTime - 0.4) / 0.25));
+      this.frontImg.style.opacity = (1 - fadeT).toFixed(2);
+      this._edgesForDeathTime(deathTime);
 
-      // Rotate from 180 to 384 (which is 24 + 360)
-      finalRotY = 180 + (384 - 180) * ease;
+      finalRotY = 180 - (180 - 24) * ease;
       finalRotX = 6 * ease;
       finalRotZ = 0;
       finalScale = 1 + Math.sin(ease * Math.PI) * 0.12;
@@ -529,6 +657,8 @@ class Player {
       if (t >= 1) {
         this.state = 'ALIVE';
         this.isFlipping = false;
+        this.backImg.style.opacity = '';
+        this.setEdgeKind('alive');
         this.edgeSlices.forEach((s) => { s.style.opacity = '1'; });
         this.frontImg.style.opacity = '1';
         this.shadowImg.style.opacity = '0.38';

@@ -227,6 +227,8 @@ async function init() {
         blink: bakeBlinkTexture(aliveAsset, 'none', 16),
         edge: bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px ${edgeShade}) brightness(0.72) contrast(1.12)`, 16),
         dead: bakeTexture(deadAsset, `drop-shadow(0 0 4px ${glow(0.6)}) drop-shadow(0 0 14px ${glow(0.45)}) drop-shadow(0 0 28px ${glow(0.3)}) saturate(0.45) brightness(1.05)`, 64, 600),
+        // Dead-letter edges, baked at the dead face's size so the swapped sides line up with it
+        deadEdge: bakeTexture(deadAsset, `drop-shadow(0 0 1.2px ${edgeShade}) brightness(0.72) contrast(1.12)`, 64, 600),
         eyes: bakeEyesTexture(aliveAsset),
         aliveShadow: `assets/images/letters/${letter}.png`,
         deadShadow: `assets/images/letters-dead/${letter}.png`

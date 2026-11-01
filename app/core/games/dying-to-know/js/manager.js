@@ -3,6 +3,8 @@
  */
 
 const MAX_PLAYERS = 8;
+const DEV_RANDOM_MONEY = true; // testing: everyone starts with £0–£2000 instead of £100
+const DEV_BOTS = 3; // simulated players for testing; 0 to turn off
 
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {
@@ -18,8 +20,12 @@ class GameManager {
 
     // Lobby UI Elements
     this.lobbyUI = document.getElementById('lobbyUI');
+    this.slotCardsEl = document.getElementById('slotCards');
+    if (this.slotCardsEl) [0, 3, 6].forEach((i) => this.slotCardsEl.children[i]?.classList.add('folded'));
     this.roomCodeEl = document.getElementById('lobbyRoomCode');
     this.startPromptEl = document.getElementById('lobbyStartPrompt');
+    this.cancelPromptEl = document.getElementById('lobbyCancelPrompt');
+    this.countdownEl = document.getElementById('startCountdown');
 
     // Blink Director
     this.blinkTimeout = null;
@@ -109,7 +115,11 @@ class GameManager {
       // A player locks in an answer (first tap counts, only while the clock runs)
       if (data.type === 'answer' && this.acceptingAnswers && !this.answers.has(roomId)) {
         const index = Number(data.index);
-        if (index >= 0 && index < 4) this.answers.set(roomId, index + 1); // 1-based like correctIndex
+        if (index >= 0 && index < 4) {
+          this.answers.set(roomId, index + 1); // 1-based like correctIndex
+          const player = this.playersById.get(roomId);
+          if (player) player.blendWiggle(0, 0.35); // locked in: face straight ahead
+        }
         return;
       }
       if (data.type === 'skip') {
@@ -120,6 +130,10 @@ class GameManager {
       if (data.type === 'start') {
         const player = this.playersById.get(roomId);
         if (player && player.isVip && this.gameState === 'LOBBY') this.startLobbyGame();
+      }
+      if (data.type === 'cancel') {
+        const player = this.playersById.get(roomId);
+        if (player && player.isVip) this.cancelStartCountdown();
       }
     });
     this.net.on('join', (info) => this.addPlayer(info));
@@ -165,13 +179,31 @@ class GameManager {
       isVip: this.players.length === 0,
     });
     player.colorIndex = colorIndex;
+    if (DEV_RANDOM_MONEY) player.money = Math.round(Math.random() * 40) * 50; // £0–£2000
     if (info.id) {
       player.roomId = info.id;
       this.playersById.set(info.id, player);
       this.sendProfile(info.id, player);
     }
     if (this.sound) this.sound.playLight();
+    this.updateSlotCards();
+
+    // Their shape glows in, the dead letter fades in under it, the glow fades, then they spin back to life
+    player.joinDead();
+    player.spawnGlow();
+    player.scrambleName(1500); // as the letter fades in
+    setTimeout(() => {
+      if (!this.players.includes(player)) return;
+      player.startReviveSpin();
+      if (this.sound) this.sound.playWhoosh();
+    }, 3600);
     return player;
+  }
+
+  /** Hide the numbered card under every lobby spot that has a player */
+  updateSlotCards() {
+    if (!this.slotCardsEl) return;
+    [...this.slotCardsEl.children].forEach((card, i) => card.classList.toggle('taken', i < this.players.length));
   }
 
   /** Send every phone the same screen, remembered so reconnecting phones get it too */
@@ -188,6 +220,7 @@ class GameManager {
     const idx = this.players.indexOf(player);
     if (idx !== -1) this.players.splice(idx, 1);
     player.slot.remove();
+    this.updateSlotCards();
 
     if (player.isVip && this.players[0]) {
       const next = this.players[0];
@@ -211,6 +244,14 @@ class GameManager {
     this.players = players;
     (this.pendingJoins || []).forEach((info) => this.addPlayer(info));
     this.pendingJoins = [];
+
+    // Dev: simulate bots joining one by one (they answer randomly)
+    const bots = ['SPOOKY', 'GHOUL', 'BONES', 'MOTH', 'CREEP', 'WISP'];
+    bots.slice(0, DEV_BOTS).forEach((name, i) => {
+      setTimeout(() => {
+        if (this.gameState === 'LOBBY') this.addPlayer({ name });
+      }, 800 + i * 700);
+    });
   }
 
   playRoomMusic(roomIndex = 0, fadeDuration = 2200) {
@@ -231,6 +272,9 @@ class GameManager {
       this.startPromptEl.addEventListener('click', () => {
         this.startLobbyGame();
       });
+    }
+    if (this.cancelPromptEl) {
+      this.cancelPromptEl.addEventListener('click', () => this.cancelStartCountdown());
     }
 
     if (this.skipIntroBtn) {
@@ -294,17 +338,67 @@ class GameManager {
     return this.players.filter((p) => p.isVisible);
   }
 
+  /** "Everybody's in": 3, 2, 1 (each a little over a second, with a slam), then the intro. Cancellable. */
   startLobbyGame() {
-    this.startIntroSequence();
+    if (this.gameState !== 'LOBBY' || this.countdownTimer) return;
+    const STEP_MS = 1150; // slightly slower than a real second
+    let n = 3;
+    this.startPromptEl?.classList.add('hidden');
+    this.cancelPromptEl?.classList.remove('hidden');
+    this.setPhoneState({ type: 'countdown' }); // VIP's phone swaps Everybody's In for Cancel
+
+    const show = () => {
+      if (n === 0) {
+        this.countdownTimer = null;
+        this.endStartCountdown();
+        this.startIntroSequence();
+        return;
+      }
+      if (this.countdownEl) {
+        this.countdownEl.textContent = String(n);
+        this.countdownEl.classList.remove('slam');
+        void this.countdownEl.offsetWidth; // restart the animation
+        this.countdownEl.classList.add('slam');
+      }
+      if (this.sound) this.sound.playSlam(0.9);
+      n--;
+      this.countdownTimer = setTimeout(show, STEP_MS);
+    };
+    show();
   }
 
-  skipIntro() {
+  cancelStartCountdown() {
+    if (!this.countdownTimer) return;
+    clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
+    this.endStartCountdown();
+    this.setPhoneState({ type: 'lobby' });
+  }
+
+  endStartCountdown() {
+    if (this.countdownEl) {
+      this.countdownEl.classList.remove('slam');
+      this.countdownEl.textContent = '';
+    }
+    this.startPromptEl?.classList.remove('hidden');
+    this.cancelPromptEl?.classList.add('hidden');
+  }
+
+  async skipIntro() {
     this.isIntroSkipped = true;
     this.isIntroRunning = false;
     this.gameState = 'PLAYING';
     this.setPhoneState({ type: 'wait' });
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
+
+    // Anything the intro already set in motion would otherwise keep going after the skip
+    clearTimeout(this.introAtmosphereTimeout);
+    if (this.sound) {
+      this.sound.stopIntroSounds();
+    }
+    const introLogo = document.getElementById('introLogo');
+    if (introLogo) introLogo.classList.remove('reveal');
 
     const introOverlay = document.getElementById('introOverlay');
     if (introOverlay) {
@@ -316,6 +410,7 @@ class GameManager {
       curtains.classList.remove('fade-in', 'opening');
     }
     if (this.lobbyUI) this.lobbyUI.classList.add('hidden');
+    if (this.slotCardsEl) this.slotCardsEl.classList.add('hidden');
     const atmosphere = document.getElementById('lobbyAtmosphere');
     if (atmosphere) atmosphere.classList.add('hidden');
 
@@ -324,10 +419,10 @@ class GameManager {
 
     if (this.room) {
       this.room.switchBg(3);
-      this.room.bgScrolling = true;
+      this.room.bgScrolling = false;
     }
     if (this.camera) {
-      this.camera.setGridMode('lineup');
+      this.camera.setGridMode('grid');
     }
     if (this.grid) {
       this.grid.classList.remove('hide-names');
@@ -337,7 +432,88 @@ class GameManager {
       p.blendWiggle(1.0, 0.2);
     });
 
+    // Same route into the first question as the full intro: scoreboard, lineup, room moves
+    await new Promise((r) => setTimeout(r, 800));
+    await this.showScoreboard();
+    this.flyTo('lineup');
+    await new Promise((r) => setTimeout(r, 1000));
+    if (this.room) this.room.bgScrolling = true;
+    await new Promise((r) => setTimeout(r, 650));
     this.showQuestion();
+  }
+
+  /**
+   * Scoreboard: room still, everyone flies to one low row (richest on the left),
+   * money pops in above them and counts to the new totals.
+   */
+  async showScoreboard() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (!this.players.length) return;
+    if (this.room) this.room.bgScrolling = false;
+
+    const ranked = [...this.players].sort((a, b) => b.money - a.money); // sort is stable: ties keep join order
+    ranked.forEach((p, i) => p.slot.style.setProperty('--rank', i));
+
+    const flight = await this.flyTo('scoreboard');
+    await wait(flight + 250);
+    if (this.sound) this.sound.playLight();
+    await wait(450);
+
+    // Each bar rises from £0 at the same £/second, so the richest take longest.
+    // The scale is set so the richest bar always fits between the row and the top of the screen.
+    const SCALE = 0.9; // scoreboard player scale (see flyTo)
+    const POUNDS_PER_SEC = 300;
+    const top = Math.max(100, ...ranked.map((p) => p.money));
+    const slotTop = ranked[0].slot.getBoundingClientRect().top + 62.5 * (1 - SCALE);
+    const roomPx = (slotTop - 54 * SCALE - 50 - 30) / SCALE; // minus label and a margin from the screen top
+    // A full-height bar is ~£1500; only squash the scale when someone has more than that
+    const pxPerPound = Math.max(0, roomPx) / Math.max(1500, top);
+    ranked.forEach((p) => p.moneyBarEl.style.setProperty('--groove', `${(100 * pxPerPound).toFixed(2)}px`));
+
+    ranked.forEach((p) => {
+      p.setMoneyText(0);
+      p.setMoneyBarLength(Math.max(0, p.money) * pxPerPound);
+      p.setMoneyBar(0);
+      p.moneyEl.classList.toggle('down', p.money < 0);
+      p.moneyEl.classList.add('visible');
+    });
+    if (this.sound) this.sound.playSwish(0.6);
+    await wait(600);
+
+    const finished = new Set();
+    const start = performance.now();
+    let notchesChimed = 0;
+    await new Promise((resolve) => {
+      const step = (now) => {
+        const pounds = ((now - start) / 1000) * POUNDS_PER_SEC;
+        ranked.forEach((p) => {
+          const target = Math.max(0, p.money);
+          const v = Math.min(pounds, target);
+          p.setMoneyText(p.money < 0 && v >= target ? p.money : v);
+          p.setMoneyBar(v * pxPerPound);
+          if (v >= target && !finished.has(p)) {
+            finished.add(p);
+            if (this.sound && now - start > 50) this.sound.playSwish(0.45);
+          }
+        });
+        // One chime per £100 notch crossed (all bars rise together), climbing in pitch
+        const notch = Math.floor(Math.min(pounds, top) / 100);
+        while (notchesChimed < notch) {
+          notchesChimed++;
+          if (this.sound) this.sound.playChime(0.7 + notchesChimed * 0.04);
+        }
+        if (finished.size < ranked.length) {
+          requestAnimationFrame(step);
+        } else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+    if (this.sound) this.sound.playEchoBell();
+
+    await wait(2200);
+    this.players.forEach((p) => p.moneyEl.classList.remove('visible'));
+    await wait(400);
+    this.players.forEach((p) => p.setMoneyBar(0));
   }
 
   async startIntroSequence() {
@@ -355,11 +531,12 @@ class GameManager {
     // 1. Smoothly fade out music and keep loud lamp humming
     if (this.sound) {
       this.sound.fadeMusicOut(900);
-      setTimeout(() => this.sound.stopAtmosphere(true), 950);
+      this.introAtmosphereTimeout = setTimeout(() => this.sound.stopAtmosphere(true), 950);
     }
 
     // 2. Hide Lobby UI & Fullscreen Atmosphere smoothly
     if (this.lobbyUI) this.lobbyUI.classList.add('hidden');
+    if (this.slotCardsEl) this.slotCardsEl.classList.add('hidden');
     const atmosphere = document.getElementById('lobbyAtmosphere');
     if (atmosphere) atmosphere.classList.add('hidden');
 
@@ -487,13 +664,14 @@ class GameManager {
     this.gameState = 'PLAYING';
     this.setPhoneState({ type: 'wait' });
 
-    // 16. Show players in the 2x4 grid, wait 2s
-    await new Promise((r) => setTimeout(r, 2000));
+    // 16. Show players in the grid, then the starting scoreboard
+    await new Promise((r) => setTimeout(r, 1500));
+    if (this.isIntroSkipped) return;
+    await this.showScoreboard();
     if (this.isIntroSkipped) return;
 
-    // 17. Perform lineup movement to the top row (L press effect) - smoothly fades out names first
-    await this.toggleLineup();
-    if (this.isIntroSkipped) return;
+    // 17. Perform lineup movement to the top row
+    this.flyTo('lineup');
 
     // 18. 1s later, begin moving the room
     await new Promise((r) => setTimeout(r, 1000));
@@ -596,6 +774,17 @@ class GameManager {
     this.net.broadcast({ type: 'open' });
     this.phoneState = { type: 'question', answers: answerTexts, shown: answerTexts.length, open: true };
     this.startQuestionTimer(data.time || 15);
+
+    // Bots lock in a random answer at a random moment while the clock runs
+    const seconds = data.time || 15;
+    this.players.filter((p) => !p.roomId).forEach((p) => {
+      p.botChoice = null;
+      setTimeout(() => {
+        if (!this.acceptingAnswers) return;
+        p.botChoice = Math.floor(Math.random() * 4) + 1;
+        p.blendWiggle(0, 0.35);
+      }, 1000 + Math.random() * (seconds - 2) * 1000);
+    });
   }
 
   hideQuestion() {
@@ -694,8 +883,9 @@ class GameManager {
       // Real players use their phone answer (no answer = wrong); dev bots still guess
       const playerChoice = p.roomId
         ? (this.answers && this.answers.get(p.roomId))
-        : Math.floor(Math.random() * 4) + 1;
+        : p.botChoice;
       const isCorrect = (playerChoice === correctIdx);
+      p.money += isCorrect ? 100 : -50;
       p.showResult(isCorrect, 0.72);
       if (p.roomId) this.net.sendTo(p.roomId, { type: 'reveal', correct: isCorrect });
     });
@@ -715,7 +905,12 @@ class GameManager {
     await new Promise((r) => setTimeout(r, 2000));
 
     // 6. Return players to the center 2x4 grid
-    this.players.forEach((p) => p.clearResult(1.0));
+    this.players.forEach((p) => p.fadeResultBadge());
+    await new Promise((r) => setTimeout(r, 450));
+    this.players.forEach((p) => {
+      p.clearResult(1.0);
+      if (p.isAlive()) p.blendWiggle(1.0, 0.45);
+    });
     await this.toggleLineup();
 
     // 7. Wait 2.5 seconds in the center before triggering room blackout transition
@@ -800,8 +995,11 @@ class GameManager {
           // Wait 2.0s in the center 2x4 grid in the new room
           await new Promise((r) => setTimeout(r, 2000));
 
+          // Every 3 rounds, the scoreboard before the next question
+          if (this.currentQuestionIdx % 3 === 0) await this.showScoreboard();
+
           // Move to top lineup
-          await this.toggleLineup();
+          this.flyTo('lineup');
 
           // 1.5s later, start room moving
           await new Promise((r) => setTimeout(r, 1500));
@@ -944,10 +1142,15 @@ class GameManager {
      ========================================= */
 
   async toggleLineup() {
+    return this.flyTo(this.camera.isLineup ? 'grid' : 'lineup');
+  }
+
+  /** Fly every player from where they are now to their place in `mode` (grid | lineup | scoreboard) */
+  async flyTo(mode) {
     if (!this.players.length) return;
 
-    const goingToLineup = !this.camera.isLineup;
-    const K_START = this.camera.isLineup ? 0.72 : 1.0;
+    const MODE_SCALE = { grid: 1.0, lineup: 0.72, scoreboard: 0.9 };
+    const K_START = MODE_SCALE[this.camera.mode] || 1.0;
 
     // 1. Capture current visual center coordinates of all slots BEFORE layout change
     const beforeCenters = this.players.map((p) => {
@@ -959,9 +1162,9 @@ class GameManager {
       };
     });
 
-    // 2. Toggle layout class on container & grid
-    const isLineup = this.camera.toggleLineup();
-    const K_END = isLineup ? 0.72 : 1.0;
+    // 2. Switch layout class on container & grid
+    this.camera.setGridMode(mode);
+    const K_END = MODE_SCALE[mode] || 1.0;
 
     // 3. Stagger trajectories smoothly (Synchronous - zero frame gap!)
     // Stagger column by column through the 2x4 grid (top then bottom of each column)
@@ -973,6 +1176,10 @@ class GameManager {
     }
     const rank = new Array(n);
     order.forEach((slotIdx, r) => { rank[slotIdx] = r; });
+    if (mode === 'scoreboard') {
+      // Land left to right along the row
+      this.players.forEach((p, i) => { rank[i] = Number(p.slot.style.getPropertyValue('--rank')) || 0; });
+    }
 
     const now = performance.now();
     this.players.forEach((p, i) => {
@@ -997,6 +1204,7 @@ class GameManager {
         now
       });
     });
+    return (n - 1) * 90 + 850; // ms until the last player lands
   }
 
   /* =========================================
@@ -1036,7 +1244,7 @@ class GameManager {
       } else if (e.code === 'Space') {
         if (this.gameState === 'INTRO') {
           this.skipIntro();
-        } else {
+        } else if (this.gameState === 'LOBBY') {
           this.startIntroSequence();
         }
       }

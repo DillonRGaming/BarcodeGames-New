@@ -275,8 +275,11 @@ class RoomManager {
       this.spawnFurniture(item, false);
     }
 
-    this.furnitureItems.forEach((item, i) => {
-      item.x = (i / this.FURNITURE_COUNT) * window.innerWidth * 1.5 + Math.random() * (window.innerWidth / this.FURNITURE_COUNT) * 0.4;
+    // Lay the starting props out left to right with clear floor between them
+    let x = Math.random() * window.innerWidth * 0.1;
+    this.furnitureItems.forEach((item) => {
+      item.x = x;
+      if (item.type) x += this.furnitureWidth(item.type) + window.innerWidth * (0.12 + Math.random() * 0.15);
       item.el.style.transform = this._applyFurniturePose(item);
     });
 
@@ -311,9 +314,18 @@ class RoomManager {
     return 'assets/images/box-3.png';
   }
 
-  furnitureTooClose(x) {
-    const minGap = window.innerWidth * 0.28;
-    return this.furnitureItems.some((it) => it.type && Math.abs(it.x - x) < minGap);
+  // x is a prop's left edge, so compare the drawn spans, not the x values
+  furnitureFits(x, type, pad, ignore = null) {
+    const w = this.furnitureWidth(type);
+    return this.furnitureItems.every((it) => {
+      if (!it.type || it === ignore) return true;
+      const ow = this.furnitureWidth(it.type);
+      return x + w + pad <= it.x || it.x + ow + pad <= x;
+    });
+  }
+
+  furnitureTooClose(x, type = null) {
+    return !this.furnitureFits(x, type, window.innerWidth * 0.2);
   }
 
   spawnFurniture(item, offscreenRight) {
@@ -323,7 +335,8 @@ class RoomManager {
       do {
         item.x = window.innerWidth + 100 + Math.random() * window.innerWidth * 2;
         tries++;
-      } while (this.furnitureTooClose(item.x) && tries < 20);
+      } while (this.furnitureTooClose(item.x, item.type) && tries < 20);
+      if (tries >= 20) item.type = null; // no clear floor: skip this one
     } else {
       item.x = Math.random() * window.innerWidth * 2.2;
     }
@@ -374,8 +387,9 @@ class RoomManager {
         const slot = this.findHiddenSlot();
         if (!slot) break;
         const type = this.pickBoxType();
+        if (!this.furnitureFits(x, type, 12)) break;
         this.activateSlot(slot, x, type, Math.random() < 0.5, 0);
-        x += this.furnitureWidth(type) * (0.85 + Math.random() * 0.3);
+        x += this.furnitureWidth(type) + 12 + Math.random() * 30;
       }
       return;
     }
@@ -389,9 +403,12 @@ class RoomManager {
       const dir = Math.random() < 0.5 ? -1 : 1;
       let type = this.pickFurnitureType();
       if (!type) type = this.pickBoxType();
-      // Leave a real gap between the two pieces based on their drawn widths
-      const gap = (this.furnitureWidth(anchor.type) + this.furnitureWidth(type)) / 2 + 20 + Math.random() * 90;
-      const x = anchor.x + dir * gap;
+      // Leave a real gap between the two pieces' edges
+      const gap = 20 + Math.random() * 90;
+      const x = dir > 0
+        ? anchor.x + this.furnitureWidth(anchor.type) + gap
+        : anchor.x - gap - this.furnitureWidth(type);
+      if (x < window.innerWidth || !this.furnitureFits(x, type, 20)) return; // never pop in on screen or overlap
       this.activateSlot(slot, x, type, Math.random() < 0.5, 0);
       return;
     }

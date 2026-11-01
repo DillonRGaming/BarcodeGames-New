@@ -27,7 +27,7 @@ class Camera {
       this.container.classList.toggle('lineup', this.isLineup);
     }
     if (this.grid) {
-      this.grid.classList.remove('lobby', 'grid-layout', 'lineup');
+      this.grid.classList.remove('lobby', 'grid-layout', 'lineup', 'scoreboard');
       if (mode === 'lobby') {
         this.grid.classList.add('lobby');
         this.grid.classList.remove('hide-names');
@@ -36,6 +36,9 @@ class Camera {
         this.grid.classList.remove('hide-names');
       } else if (mode === 'lineup') {
         this.grid.classList.add('lineup');
+      } else if (mode === 'scoreboard') {
+        this.grid.classList.add('scoreboard');
+        this.grid.classList.remove('hide-names');
       }
     }
   }
