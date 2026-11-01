@@ -78,7 +78,7 @@ body[data-game='dying-to-know'] {
   justify-content: center;
   align-items: center;
   gap: 14px;
-  padding: 16px 16px calc(30vh + env(safe-area-inset-bottom)); /* sits above centre */
+  padding: 16px 16px calc(25vh + env(safe-area-inset-bottom)); /* sits above centre */
   text-align: center;
 }
 
