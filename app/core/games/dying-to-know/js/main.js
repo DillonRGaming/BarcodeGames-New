@@ -10,12 +10,12 @@ const assetCache = {};
    ========================================= */
 
 function bakeTexture(imgElement, filterString, padding = 16, maxDim = 260) {
-  if (!imgElement || imgElement.naturalWidth === 0) {
+  if (!imgElement || (imgElement.naturalWidth || imgElement.width) === 0) {
     return imgElement ? imgElement.src : '';
   }
   try {
-    const nw = imgElement.naturalWidth || 260;
-    const nh = imgElement.naturalHeight || 260;
+    const nw = imgElement.naturalWidth || imgElement.width || 260;
+    const nh = imgElement.naturalHeight || imgElement.height || 260;
     let targetW, targetH;
 
     if (nw > nh) {
@@ -40,12 +40,12 @@ function bakeTexture(imgElement, filterString, padding = 16, maxDim = 260) {
 }
 
 function bakeBlinkTexture(imgElement, filterString, padding = 16) {
-  if (!imgElement || imgElement.naturalWidth === 0) {
+  if (!imgElement || (imgElement.naturalWidth || imgElement.width) === 0) {
     return imgElement ? imgElement.src : '';
   }
   try {
-    const nw = imgElement.naturalWidth || 260;
-    const nh = imgElement.naturalHeight || 260;
+    const nw = imgElement.naturalWidth || imgElement.width || 260;
+    const nh = imgElement.naturalHeight || imgElement.height || 260;
     const maxDim = 260;
     let targetW, targetH;
 
@@ -82,10 +82,10 @@ function bakeBlinkTexture(imgElement, filterString, padding = 16) {
 }
 
 function bakeEyesTexture(imgElement) {
-  if (!imgElement || imgElement.naturalWidth === 0) return '';
+  if (!imgElement || (imgElement.naturalWidth || imgElement.width) === 0) return '';
   try {
-    const nw = imgElement.naturalWidth || 260;
-    const nh = imgElement.naturalHeight || 260;
+    const nw = imgElement.naturalWidth || imgElement.width || 260;
+    const nh = imgElement.naturalHeight || imgElement.height || 260;
     const maxDim = 260;
     let targetW, targetH;
     if (nw > nh) {
@@ -124,19 +124,22 @@ function bakeEyesTexture(imgElement) {
    Player Colours & Letters
    ========================================= */
 
-// Fixed palette: the Nth person to join always gets colour N. Filters tint the red base letter art.
-const PLAYER_COLORS = [
-  { hex: '#c7595e', filter: 'hue-rotate(0deg) saturate(1.1) brightness(1.05)' },     // red
-  { hex: '#5e94c2', filter: 'hue-rotate(200deg) saturate(1.15) brightness(1.0)' },   // blue
-  { hex: '#7ab372', filter: 'hue-rotate(100deg) saturate(1.05) brightness(1.02)' },  // green
-  { hex: '#d4cc6d', filter: 'hue-rotate(50deg) saturate(1.2) brightness(1.15)' },    // yellow
-  { hex: '#9d7cbd', filter: 'hue-rotate(270deg) saturate(1.1) brightness(1.05)' },   // purple
-  { hex: '#e06f97', filter: 'hue-rotate(330deg) saturate(1.1) brightness(1.1)' },    // pink
-  { hex: '#e08a45', filter: 'hue-rotate(22deg) saturate(1.35) brightness(1.15)' },   // orange
-  { hex: '#4fa8a0', filter: 'hue-rotate(160deg) saturate(1.0) brightness(1.05)' },   // teal
-  { hex: '#c4996b', filter: 'hue-rotate(25deg) saturate(0.95) brightness(1.0)' },    // brown
-  { hex: '#c2c2c2', filter: 'saturate(0.08) brightness(1.25) contrast(1.1)' },       // grey
-];
+// Letter art recoloured to a player's colour (palette.js), as a canvas the bakers can read
+function tintedLetter(img, hex) {
+  if (!img || !img.naturalWidth) return img;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  tintLetterCanvas(ctx, canvas.width, canvas.height, hex);
+  return canvas;
+}
+
+function shadeHex(hex, amount) {
+  const c = [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * amount));
+  return `rgb(${c.join(', ')})`;
+}
 
 const NAME_TILTS = [-6, 4, -3, 5, -4, 6, -5, 4];
 
@@ -204,9 +207,9 @@ async function init() {
   manager.createPlayer = ({ name, colorIndex, isVip = false }) => {
     const color = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
     const letter = letterForName(name);
-    const aliveAsset = assetCache[`alive_${letter}`];
+    const aliveAsset = tintedLetter(assetCache[`alive_${letter}`], color);
     const deadAsset = assetCache[`dead_${letter}`];
-    const filter = color.filter;
+    const edgeShade = shadeHex(color, 0.4);
     const index = players.length;
 
     // Original high-quality texture filters preserving eye whites, depth, and contrast
@@ -214,15 +217,15 @@ async function init() {
       letter,
       index,
       name,
-      color: color.hex,
+      color,
       tilt: NAME_TILTS[index % NAME_TILTS.length],
       isVip,
       isVisible: true,
       textures: {
-        front: bakeTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16),
-        blink: bakeBlinkTexture(aliveAsset, `saturate(0.82) brightness(1.14) ${filter}`, 16),
-        edge: bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px #652224) brightness(0.72) contrast(1.12) saturate(0.85) ${filter}`, 16),
-        dead: bakeTexture(deadAsset, `drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28) ${filter}`, 64, 600),
+        front: bakeTexture(aliveAsset, 'none', 16),
+        blink: bakeBlinkTexture(aliveAsset, 'none', 16),
+        edge: bakeTexture(aliveAsset, `drop-shadow(0 0 1.2px ${edgeShade}) brightness(0.72) contrast(1.12)`, 16),
+        dead: bakeTexture(deadAsset, 'drop-shadow(0 0 4px rgba(240, 70, 80, 0.95)) drop-shadow(0 0 14px rgba(220, 55, 65, 0.9)) drop-shadow(0 0 28px rgba(220, 55, 65, 0.75)) saturate(0.28) brightness(1.28)', 64, 600),
         eyes: bakeEyesTexture(aliveAsset),
         aliveShadow: `assets/images/letters/${letter}.png`,
         deadShadow: `assets/images/letters-dead/${letter}.png`

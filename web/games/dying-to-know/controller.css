@@ -15,7 +15,7 @@ body[data-game='dying-to-know'] {
   color: #efe6d2;
   background:
     radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.6) 100%),
-    url('assets/hotel-wall.jpg') center / cover no-repeat;
+    url('assets/hotel-wall.jpg') center top / auto 100% repeat-x; /* tiles sideways at full height, like the game's rooms */
 }
 
 .dtk-header {
@@ -24,7 +24,7 @@ body[data-game='dying-to-know'] {
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
   background-color: var(--player-color, #0b0805);
   background-image: url('assets/knit.svg');
-  background-size: 30px 60px;
+  background-size: 14px 28px;
   border-bottom: 3px solid #000;
   transition: background-color 0.4s;
 }

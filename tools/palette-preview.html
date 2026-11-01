@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Player palette preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 24px; background: #1a1420; color: #eee; font-family: 'Special Elite', monospace; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px 16px; max-width: 1100px; }
+    .card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    canvas { width: 120px; height: auto; }
+    .bar { width: 100%; padding: 10px 0; text-align: center; font-size: 20px; color: #120d08;
+      background-image: url('../web/games/dying-to-know/assets/knit.svg'); background-size: 14px 28px;
+      border-bottom: 3px solid #000; }
+    .hex { font-size: 13px; color: #aaa; }
+  </style>
+</head>
+
+<body>
+  <div class="grid" id="grid"></div>
+  <script src="../app/core/games/dying-to-know/js/palette.js"></script>
+  <script>
+    // Serve the repo root (python3 -m http.server) and open /tools/palette-preview.html
+    const names = ['DILLON', 'GHOUL', 'BONES', 'MOTH', 'CREEP', 'WISP', 'HOLLOW', 'NIGHT', 'SPOOKY', 'ECHO'];
+    PLAYER_COLORS.forEach((hex, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const canvas = document.createElement('canvas');
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        tintLetterCanvas(ctx, canvas.width, canvas.height, hex);
+      };
+      img.src = `../app/core/games/dying-to-know/assets/images/letters/${names[i][0]}.png`;
+      card.innerHTML = `<div class="bar" style="background-color:${hex}">${names[i]}</div><div class="hex">${i + 1}. ${hex}</div>`;
+      card.prepend(canvas);
+      document.getElementById('grid').appendChild(card);
+    });
+  </script>
+</body>
+
+</html>
