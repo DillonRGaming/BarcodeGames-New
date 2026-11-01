@@ -4,7 +4,9 @@
  * Messages from the host app (data):
  *   { type: 'profile', color, letter, vip }  how this player looks in the game
  *   { type: 'lobby' }                         waiting for the game to start (VIP sees the start button)
- *   { type: 'question', answers: [4 strings] } show answer buttons
+ *   { type: 'question', answers, shown, open } answers (first `shown` visible, tappable once `open`)
+ *   { type: 'show', index }                   reveal one answer, in sync with the TV
+ *   { type: 'open' }                          countdown started: answers can be tapped
  *   { type: 'reveal', correct: boolean }      after the timer runs out
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
  *
@@ -52,13 +54,17 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   }
 
   // Same look as the answers on the TV: torn number tile + typewriter text, stacked and centred
-  function showQuestion(answers) {
+  let answerButtons = [];
+
+  function showQuestion(answers, shown = 0, open = false) {
     body.innerHTML = '<div class="dtk-answers"></div>';
     const list = body.querySelector('.dtk-answers');
-    answers.forEach((text, index) => {
+    answerButtons = answers.map((text, index) => {
       const btn = document.createElement('button');
       btn.className = 'dtk-answer';
       btn.type = 'button';
+      btn.disabled = !open;
+      if (index < shown) btn.classList.add('visible');
       btn.innerHTML = '<span class="dtk-answer-num"></span><span class="dtk-answer-text"></span>';
       btn.querySelector('.dtk-answer-num').textContent = index + 1;
       btn.querySelector('.dtk-answer-text').textContent = text;
@@ -71,10 +77,19 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         });
       });
       list.appendChild(btn);
+      return btn;
     });
   }
 
   onMessage((data) => {
+    if (data.type === 'show') {
+      if (answerButtons[data.index]) answerButtons[data.index].classList.add('visible');
+      return;
+    }
+    if (data.type === 'open') {
+      answerButtons.forEach((b) => { if (!b.closest('.answered')) b.disabled = false; });
+      return;
+    }
     if (data.type === 'profile') {
       header.style.setProperty('--player-color', data.color);
       header.classList.add('has-color');
@@ -91,7 +106,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         showMessage();
         break;
       case 'question':
-        showQuestion(data.answers);
+        showQuestion(data.answers, data.shown ?? data.answers.length, data.open ?? true);
         break;
       case 'reveal':
         showMessage(data.correct ? 'Correct' : 'Wrong');

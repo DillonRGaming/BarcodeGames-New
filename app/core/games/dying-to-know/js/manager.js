@@ -566,10 +566,16 @@ class GameManager {
     await new Promise((r) => setTimeout(r, 300));
     if (!this.isQuestionActive) return;
 
-    // 3. Reveal answers one by one with a swish sound every time an answer shows
+    // 3. Reveal answers one by one with a swish sound every time an answer shows.
+    // Phones get the answers up front (hidden) and reveal each one at the same moment as the TV.
+    const answerTexts = data.answers.map((a) => a.text);
+    this.answers = new Map();
+    this.setPhoneState({ type: 'question', answers: answerTexts, shown: 0, open: false });
     for (let i = 0; i < items.length; i++) {
       if (!this.isQuestionActive) return;
       items[i].classList.add('visible');
+      this.net.broadcast({ type: 'show', index: i });
+      this.phoneState = { type: 'question', answers: answerTexts, shown: i + 1, open: false };
       if (this.sound) {
         this.sound.playSwish(0.75);
       }
@@ -578,10 +584,10 @@ class GameManager {
 
     if (!this.isQuestionActive) return;
 
-    // 4. Phones get the answers; start the countdown
-    this.answers = new Map();
+    // 4. Answers open on phones as the countdown starts
     this.acceptingAnswers = true;
-    this.setPhoneState({ type: 'question', answers: data.answers.map((a) => a.text) });
+    this.net.broadcast({ type: 'open' });
+    this.phoneState = { type: 'question', answers: answerTexts, shown: answerTexts.length, open: true };
     this.startQuestionTimer(data.time || 15);
   }
 
