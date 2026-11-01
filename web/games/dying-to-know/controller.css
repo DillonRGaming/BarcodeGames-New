@@ -38,7 +38,7 @@ body[data-game='dying-to-know'] {
   content: '';
   position: absolute;
   inset: 0;
-  border: 7px solid rgba(0, 0, 0, 0.23);
+  border: 5px solid rgba(0, 0, 0, 0.23);
   pointer-events: none;
 }
 
