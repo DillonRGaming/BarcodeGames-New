@@ -17,8 +17,9 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   root.innerHTML = `
     <div class="dtk">
       <header class="dtk-header">
+        <span class="dtk-vip dtk-vip-left hidden">VIP</span>
         <span class="dtk-name"></span>
-        <span class="dtk-vip hidden">VIP</span>
+        <span class="dtk-vip dtk-vip-right hidden">VIP</span>
       </header>
       <section class="dtk-body"></section>
       <footer class="dtk-footer hidden">
@@ -29,7 +30,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   root.querySelector('.dtk-name').textContent = player.name;
   const header = root.querySelector('.dtk-header');
   const body = root.querySelector('.dtk-body');
-  const vipTag = root.querySelector('.dtk-vip');
+  const vipTags = root.querySelectorAll('.dtk-vip');
   const footer = root.querySelector('.dtk-footer');
   const startBtn = root.querySelector('.dtk-start');
 
@@ -75,7 +76,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
       header.style.setProperty('--player-color', data.color);
       header.classList.add('has-color');
       isVip = !!data.vip;
-      vipTag.classList.toggle('hidden', !isVip);
+      vipTags.forEach((tag) => tag.classList.toggle('hidden', !isVip));
       updateFooter();
       return;
     }

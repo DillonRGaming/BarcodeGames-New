@@ -66,7 +66,7 @@ body[data-game='dying-to-know'] {
 .dtk-vip {
   position: relative;
   z-index: 1;
-  font-size: 32px;
+  font-size: 36px;
   letter-spacing: 0.04em;
 }
 
@@ -142,9 +142,8 @@ body[data-game='dying-to-know'] {
 
 .dtk-vip {
   position: absolute;
-  right: 18px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(calc(-50% + 0.15em)); /* centred, plus Special Elite's optical nudge */
   font-size: 16px;
   letter-spacing: 2px;
   color: #ffffff; /* same as the VIP tag on the TV */
@@ -192,4 +191,17 @@ body[data-game='dying-to-know'] {
     transform: scale(1.03);
     text-shadow: 0 0 12px rgba(189, 49, 49, 0.5), 0 2px 8px rgba(0, 0, 0, 0.95);
   }
+}
+
+.dtk-vip-left {
+  left: 18px;
+}
+
+.dtk-vip-right {
+  right: 18px;
+}
+
+/* Special Elite letters sit ~0.15em high in their line box; nudge down to optical centre */
+.dtk-name {
+  transform: translateY(0.15em);
 }
