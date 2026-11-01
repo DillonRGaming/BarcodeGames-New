@@ -12,7 +12,7 @@ class GameManager {
 
     // Game Loop States: 'LOBBY', 'STARTING', 'IN_GAME'
     this.gameState = 'LOBBY';
-    this.roomCode = 'CUNT';
+    this.roomCode = null;
 
     // Lobby UI Elements
     this.lobbyUI = document.getElementById('lobbyUI');
@@ -82,7 +82,26 @@ class GameManager {
 
     this._initInput();
     this._initLobbyUI();
+    this._initRoom();
     this._startBlinkDirector();
+  }
+
+  /* =========================================
+     Room Server Connection (players join at barcodegames.fun)
+     ========================================= */
+
+  _initRoom() {
+    const joinUrlEl = document.getElementById('lobbyJoinUrl');
+    if (joinUrlEl && window.barcode && window.barcode.joinUrl) {
+      joinUrlEl.textContent = window.barcode.joinUrl.toUpperCase();
+    }
+
+    this.room = new RoomHost({ game: 'dying-to-know', maxPlayers: 8 });
+    this.room.on('code', (code) => this.setRoomCode(code));
+    this.room.on('status', (status) => {
+      if (this.roomCodeEl) this.roomCodeEl.classList.toggle('offline', status !== 'open');
+    });
+    this.room.connect();
   }
 
   setPlayers(players) {

@@ -1030,3 +1030,7 @@ body {
 .skip-intro-btn.hidden {
   display: none;
 }
+/* Room code dims while disconnected from the room server */
+.code-value.offline {
+  opacity: 0.35;
+}

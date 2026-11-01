@@ -1,0 +1,8 @@
+# Windows build. Run build.sh (Linux/Mac) or build.bat (Windows); output goes to app/windows/dist/
+# The zip builds anywhere. The installer (nsis) needs Windows, or wine on Linux.
+extends: ../core/electron-builder.base.yml
+directories:
+  output: ../windows/dist
+  buildResources: ../windows/resources
+win:
+  target: [zip, nsis]

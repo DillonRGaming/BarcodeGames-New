@@ -1,0 +1,13 @@
+{
+  "name": "barcodegames-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Room server shared by every BarcodeGames game. Public at wss://api.barcodegames.fun",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

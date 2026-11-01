@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0d10">
+  <title>BarcodeGames</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared/join.css">
+</head>
+
+<body>
+  <!-- Join screen: shared by every game -->
+  <main id="joinScreen" class="join-screen">
+    <h1 class="brand">Barcode<span>Games</span></h1>
+
+    <form id="joinForm" class="join-form" autocomplete="off" novalidate>
+      <label class="field">
+        <span class="field-label">Room code</span>
+        <input id="codeInput" class="code-input" maxlength="4" inputmode="text" autocapitalize="characters"
+          spellcheck="false" placeholder="ABCD" required>
+        <span id="gamePreview" class="game-preview" aria-live="polite"></span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Name</span>
+        <input id="nameInput" class="name-input" maxlength="12" autocapitalize="words" spellcheck="false"
+          placeholder="Enter your name" required>
+      </label>
+
+      <p id="joinError" class="join-error" role="alert"></p>
+
+      <button id="joinBtn" class="join-btn" type="submit">Play</button>
+    </form>
+  </main>
+
+  <!-- Game controller: each game mounts its own UI here -->
+  <main id="gameScreen" class="game-screen hidden"></main>
+
+  <!-- Connection notices (shared) -->
+  <div id="notice" class="notice hidden" role="status"></div>
+
+  <script src="shared/room-client.js"></script>
+  <script src="games/games.js"></script>
+  <script src="shared/join.js"></script>
+</body>
+
+</html>

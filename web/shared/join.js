@@ -1,0 +1,195 @@
+/**
+ * Join shell — the part of barcodegames.fun shared by every game.
+ * Handles room code + name, joining, reconnecting, and connection notices,
+ * then loads the game's own controller from games/<id>/.
+ *
+ * A game controller registers itself with:
+ *   BarcodeJoin.registerController('<game-id>', ({ root, player, send, onMessage }) => { ... });
+ */
+
+(() => {
+  const SESSION_KEY = 'barcode:session'; // { code, playerToken, name } for rejoining after a refresh
+  const NAME_KEY = 'barcode:name';
+
+  const $ = (id) => document.getElementById(id);
+  const joinScreen = $('joinScreen');
+  const gameScreen = $('gameScreen');
+  const form = $('joinForm');
+  const codeInput = $('codeInput');
+  const nameInput = $('nameInput');
+  const joinBtn = $('joinBtn');
+  const errorEl = $('joinError');
+  const previewEl = $('gamePreview');
+  const noticeEl = $('notice');
+
+  const controllers = {};
+  const messageHandlers = [];
+  let client = null;
+
+  const store = {
+    get(storage, key) { try { return JSON.parse(storage.getItem(key)); } catch { return null; } },
+    set(storage, key, value) { try { storage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ } },
+    remove(storage, key) { try { storage.removeItem(key); } catch { /* private mode */ } },
+  };
+
+  window.BarcodeJoin = {
+    registerController(gameId, mount) {
+      controllers[gameId] = mount;
+    },
+  };
+
+  /* ---------- Join form ---------- */
+
+  const params = new URLSearchParams(location.search);
+  codeInput.value = (params.get('code') || '').toUpperCase().slice(0, 4);
+  nameInput.value = store.get(localStorage, NAME_KEY) || '';
+
+  let lookupId = 0;
+  async function previewGame() {
+    const code = codeInput.value;
+    previewEl.textContent = '';
+    previewEl.classList.remove('bad');
+    if (code.length !== 4) return;
+    const id = ++lookupId;
+    const room = await RoomClient.lookup(code);
+    if (id !== lookupId) return;
+    if (!room) {
+      previewEl.textContent = 'Room not found';
+      previewEl.classList.add('bad');
+    } else {
+      const game = window.BARCODE_GAMES[room.game];
+      previewEl.textContent = `${game ? game.title : room.game} · ${room.players}/${room.maxPlayers}`;
+    }
+  }
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    errorEl.textContent = '';
+    if (codeInput.value.length === 4 && !nameInput.value) nameInput.focus();
+    previewGame();
+  });
+
+  nameInput.addEventListener('input', () => { errorEl.textContent = ''; });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = codeInput.value;
+    const name = nameInput.value.trim();
+    if (code.length !== 4) return showError('Enter the 4-letter room code');
+    if (!name) return showError('Enter a name');
+    store.set(localStorage, NAME_KEY, name);
+    join(code, name);
+  });
+
+  function showError(message) {
+    errorEl.textContent = message;
+    joinBtn.disabled = false;
+    joinBtn.textContent = 'Play';
+  }
+
+  /* ---------- Connection ---------- */
+
+  function join(code, name, playerToken = null) {
+    joinBtn.disabled = true;
+    joinBtn.textContent = 'Joining…';
+
+    client = new RoomClient();
+    client.on('joined', onJoined);
+    client.on('message', (data) => messageHandlers.forEach((fn) => fn(data)));
+    client.on('error', (err) => {
+      if (client.player && err.code !== 'OFFLINE') return; // in-game errors don't kick you out
+      store.remove(sessionStorage, SESSION_KEY);
+      showJoinScreen();
+      showError(err.message);
+    });
+    client.on('status', (status) => {
+      if (status === 'reconnecting') showNotice('Reconnecting…');
+      if (status === 'open') hideNotice();
+    });
+    client.on('hostAway', () => showNotice('Waiting for the host…'));
+    client.on('hostBack', hideNotice);
+    client.on('closed', () => endGame('The game has ended'));
+    client.on('kicked', () => endGame('You were removed from the game'));
+    client.join(code, name, playerToken);
+  }
+
+  async function onJoined(msg) {
+    store.set(sessionStorage, SESSION_KEY, { code: msg.code, name: msg.player.name, playerToken: msg.playerToken });
+    if (!msg.hostConnected) showNotice('Waiting for the host…');
+    if (msg.reconnected && !gameScreen.classList.contains('hidden')) return;
+
+    try {
+      await loadController(msg.game);
+    } catch {
+      client.leave();
+      showJoinScreen();
+      return showError("This game isn't available on the website yet");
+    }
+
+    joinScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+    gameScreen.innerHTML = '';
+    document.body.dataset.game = msg.game;
+
+    controllers[msg.game]({
+      root: gameScreen,
+      player: msg.player,
+      code: msg.code,
+      send: (data) => client.send(data),
+      onMessage: (fn) => messageHandlers.push(fn),
+    });
+  }
+
+  function loadController(gameId) {
+    if (controllers[gameId]) return Promise.resolve();
+    if (!window.BARCODE_GAMES[gameId]) return Promise.reject(new Error('Unknown game'));
+
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = `games/${gameId}/controller.css`;
+    document.head.appendChild(css);
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `games/${gameId}/controller.js`;
+      script.onload = () => (controllers[gameId] ? resolve() : reject(new Error('Controller did not register')));
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
+  }
+
+  function endGame(message) {
+    store.remove(sessionStorage, SESSION_KEY);
+    hideNotice();
+    showJoinScreen();
+    showError(message);
+  }
+
+  function showJoinScreen() {
+    messageHandlers.length = 0;
+    delete document.body.dataset.game;
+    gameScreen.classList.add('hidden');
+    gameScreen.innerHTML = '';
+    joinScreen.classList.remove('hidden');
+  }
+
+  function showNotice(text) {
+    noticeEl.textContent = text;
+    noticeEl.classList.remove('hidden');
+  }
+
+  function hideNotice() {
+    noticeEl.classList.add('hidden');
+  }
+
+  /* ---------- Rejoin after a refresh ---------- */
+
+  const saved = store.get(sessionStorage, SESSION_KEY);
+  if (saved && saved.code && saved.playerToken) {
+    codeInput.value = saved.code;
+    nameInput.value = saved.name || nameInput.value;
+    join(saved.code, saved.name, saved.playerToken);
+  } else if (codeInput.value.length === 4) {
+    previewGame();
+  }
+})();

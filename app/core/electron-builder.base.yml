@@ -1,0 +1,10 @@
+# Build settings shared by every platform. Platform folders (app/linux, app/windows) extend this.
+appId: fun.barcodegames.app
+productName: BarcodeGames
+files:
+  - main.js
+  - preload.js
+  - package.json
+  - shared/**
+  - games/**
+  - "!games/**/archive/**"

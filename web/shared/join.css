@@ -1,0 +1,180 @@
+/* Join shell — shared by every game. Game controllers style themselves in games/<id>/controller.css */
+
+:root {
+  --bg: #0d0d10;
+  --surface: #18181d;
+  --border: #2c2c34;
+  --text: #f4f1ea;
+  --muted: #8d8a94;
+  --accent: #ffcc33;
+  --accent-text: #1a1406;
+  --danger: #ff6b6b;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rubik', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Join screen ---------- */
+
+.join-screen {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+
+.brand {
+  font-size: clamp(32px, 9vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.brand span {
+  color: var(--accent);
+}
+
+.join-form {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.code-input,
+.name-input {
+  width: 100%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  padding: 14px 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.code-input:focus,
+.name-input:focus {
+  border-color: var(--accent);
+}
+
+.code-input {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.name-input {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.code-input::placeholder,
+.name-input::placeholder {
+  color: #4a4852;
+}
+
+.game-preview {
+  min-height: 1.2em;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--accent);
+}
+
+.game-preview.bad {
+  color: var(--muted);
+}
+
+.join-error {
+  min-height: 1.2em;
+  font-size: 15px;
+  text-align: center;
+  color: var(--danger);
+}
+
+.join-btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.15s;
+}
+
+.join-btn:active {
+  transform: scale(0.97);
+}
+
+.join-btn:disabled {
+  opacity: 0.6;
+}
+
+/* ---------- Game screen (games fill this) ---------- */
+
+.game-screen {
+  min-height: 100%;
+}
+
+/* ---------- Connection notice ---------- */
+
+.notice {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-family: 'Rubik', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  z-index: 100;
+}

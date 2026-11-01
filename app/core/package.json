@@ -1,0 +1,16 @@
+{
+  "name": "barcodegames",
+  "productName": "BarcodeGames",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BarcodeGames host app: runs the games on the TV; players join at barcodegames.fun",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:local": "electron . --local-server"
+  },
+  "devDependencies": {
+    "electron": "^39.8.10",
+    "electron-builder": "^26.18.0"
+  }
+}

@@ -1,0 +1,8 @@
+# Linux build. Run ./build.sh from this folder; output goes to app/linux/dist/
+extends: ../core/electron-builder.base.yml
+directories:
+  output: ../linux/dist
+  buildResources: ../linux/resources
+linux:
+  target: [AppImage]
+  category: Game

@@ -1,0 +1,109 @@
+/* Dying to Know — phone controller. Hotel wallpaper from the game's rooms. */
+
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
+
+body[data-game='dying-to-know'] {
+  background: #15110a;
+}
+
+.dtk {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  font-family: 'Special Elite', 'Courier New', monospace;
+  color: #efe6d2;
+  background:
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.6) 100%),
+    url('assets/hotel-wall.jpg') center / cover no-repeat;
+}
+
+.dtk-header {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.dtk-name {
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.dtk-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.dtk-title {
+  font-size: clamp(36px, 11vw, 52px);
+  font-weight: normal;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.95);
+}
+
+.dtk-sub {
+  max-width: 300px;
+  font-size: 18px;
+  line-height: 1.4;
+  color: #cbbf9f;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+}
+
+.dtk-answers {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dtk-answer {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 2px solid rgba(239, 230, 210, 0.35);
+  border-radius: 10px;
+  background: rgba(12, 9, 4, 0.78);
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.2s, border-color 0.2s;
+}
+
+.dtk-answer:active {
+  transform: scale(0.98);
+}
+
+.dtk-answer:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dtk-answer.picked {
+  opacity: 1;
+  border-color: #efe6d2;
+  background: rgba(70, 52, 18, 0.88);
+}
+
+.dtk-answer-num {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #efe6d2;
+  color: #15110a;
+  font-size: 18px;
+}
