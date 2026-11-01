@@ -851,7 +851,7 @@ body {
 .question-box {
   position: absolute;
   left: clamp(12%, 17vw, 22%);
-  top: clamp(32%, 36vh, 42%);
+  top: clamp(35%, 39vh, 45%);
   max-width: clamp(260px, 32vw, 480px);
   transform: rotate(-6deg);
   transform-origin: center left;
@@ -946,46 +946,49 @@ body {
 .question-timer {
   position: absolute;
   left: clamp(20%, 26vw, 32%);
-  bottom: clamp(7%, 11vh, 15%);
+  bottom: clamp(20%, 24vh, 28%);
   pointer-events: none;
   user-select: none;
-  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.9));
 }
 
 .circle-timer {
   position: relative;
-  width: clamp(76px, 8vw, 108px);
-  height: clamp(76px, 8vw, 108px);
+  width: clamp(110px, 10vw, 150px);
+  height: clamp(110px, 10vw, 150px);
   border-radius: 50%;
-  background: #ffffff;
-  border: 4px solid #1a1a1a;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
 }
 
-/* Red Countdown Sector Wedge (Conic Gradient) */
+/* Remaining time as a ring that drains clockwise */
 .watch-pie {
   position: absolute;
   inset: 0;
-  background: conic-gradient(#cf2228 0deg, #cf2228 var(--pie-angle, 180deg), transparent var(--pie-angle, 180deg), transparent 360deg);
-  opacity: 0.88;
   border-radius: 50%;
+  background: conic-gradient(transparent 0deg var(--pie-angle, 0deg), #ffffff var(--pie-angle, 0deg) 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
   pointer-events: none;
 }
 
 .timer-digits {
   position: relative;
-  z-index: 5;
   font-family: "Special Elite", monospace, sans-serif;
-  font-size: clamp(26px, 2.8vw, 42px);
+  font-size: clamp(44px, 4.2vw, 64px);
   font-weight: 700;
-  color: #1a1a1a;
+  color: #ffffff;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Last 5 seconds */
+.question-timer.urgent .watch-pie {
+  background: conic-gradient(transparent 0deg var(--pie-angle, 0deg), #ff3b3b var(--pie-angle, 0deg) 360deg);
+}
+
+.question-timer.urgent .timer-digits {
+  color: #ff3b3b;
 }
 
 /* 4. Skip Intro Button */

@@ -606,6 +606,8 @@ class GameManager {
       if (this.timerDigitsEl) {
         this.timerDigitsEl.textContent = Math.max(0, s);
       }
+      const timerEl = document.getElementById('questionTimer');
+      if (timerEl) timerEl.classList.toggle('urgent', s <= 5);
       const pie = document.getElementById('watchPie');
       if (pie) {
         const progress = Math.max(0, Math.min(1, s / totalSeconds));

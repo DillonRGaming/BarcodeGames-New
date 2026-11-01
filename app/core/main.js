@@ -49,6 +49,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 540,
     backgroundColor: '#000000',
+    fullscreen: true, // F11 to leave
     title: 'BarcodeGames',
     autoHideMenuBar: true, // Alt shows it (dev tools, reload, fullscreen)
     webPreferences: {
