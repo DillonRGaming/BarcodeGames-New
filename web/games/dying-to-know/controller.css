@@ -11,7 +11,6 @@ body[data-game='dying-to-know'] {
   inset: 0;
   display: flex;
   flex-direction: column;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   font-family: 'Special Elite', 'Courier New', monospace;
   color: #efe6d2;
   background:
@@ -22,13 +21,14 @@ body[data-game='dying-to-know'] {
 .dtk-header {
   display: flex;
   justify-content: center;
-  padding-top: 8px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  background: #0b0805;
+  border-bottom: 2px solid #efe6d2;
 }
 
 .dtk-name {
   font-size: 26px;
   letter-spacing: 0.04em;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
 }
 
 .dtk-body {
@@ -38,6 +38,7 @@ body[data-game='dying-to-know'] {
   justify-content: center;
   align-items: center;
   gap: 14px;
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
   text-align: center;
 }
 

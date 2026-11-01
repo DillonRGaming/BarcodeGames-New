@@ -6,9 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <title>BarcodeGames</title>
+  <link rel="icon" href="favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shared/join.css">
 </head>
 
@@ -16,20 +17,25 @@
   <!-- Join screen: shared by every game -->
   <div id="joinScreen" class="join-screen">
     <header class="topbar">
-      <span class="brand">barcodegames.fun</span>
+      <img class="logo" src="shared/logo.png" alt="BarcodeGames">
     </header>
 
     <form id="joinForm" class="join-form" autocomplete="off" novalidate>
       <label class="field">
-        <span class="field-label">Room code</span>
-        <input id="codeInput" maxlength="4" autocapitalize="characters" spellcheck="false"
-          placeholder="ENTER 4-LETTER CODE" required>
+        <span class="field-label">Room code <span id="gameName" class="field-extra"></span></span>
+        <span class="input-wrap">
+          <input id="codeInput" maxlength="4" autocapitalize="characters" spellcheck="false"
+            placeholder="ENTER 4-LETTER CODE" required>
+          <span id="codeStatus" class="code-status" aria-hidden="true"></span>
+        </span>
       </label>
 
       <label class="field">
-        <span class="field-label">Name <span id="nameCount" class="field-count">12</span></span>
-        <input id="nameInput" maxlength="12" autocapitalize="characters" spellcheck="false"
-          placeholder="ENTER YOUR NAME" required>
+        <span class="field-label">Name <span id="nameCount" class="field-extra">12</span></span>
+        <span class="input-wrap">
+          <input id="nameInput" maxlength="12" autocapitalize="characters" spellcheck="false"
+            placeholder="ENTER YOUR NAME" required>
+        </span>
       </label>
 
       <p id="joinError" class="join-error" role="alert"></p>
@@ -41,7 +47,7 @@
   <!-- Game controller: each game mounts its own UI here -->
   <main id="gameScreen" class="game-screen hidden"></main>
 
-  <!-- Connection notices (shared) -->
+  <!-- Connection notice (shared) -->
   <div id="notice" class="notice hidden" role="status"></div>
 
   <script src="shared/room-client.js"></script>

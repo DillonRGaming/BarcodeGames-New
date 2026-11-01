@@ -20,6 +20,8 @@
   const joinBtn = $('joinBtn');
   const errorEl = $('joinError');
   const nameCount = $('nameCount');
+  const gameNameEl = $('gameName');
+  const codeStatus = $('codeStatus');
   const noticeEl = $('notice');
 
   const controllers = {};
@@ -44,16 +46,36 @@
   codeInput.value = (params.get('code') || '').toUpperCase().slice(0, 4);
   nameInput.value = store.get(localStorage, NAME_KEY) || '';
 
+  let codeValid = null; // null = not checked yet, true / false once the server answers
+  let lookupId = 0;
+
   function updateForm() {
     codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
     nameInput.value = nameInput.value.toUpperCase();
     nameCount.textContent = nameInput.maxLength - nameInput.value.length;
-    joinBtn.disabled = codeInput.value.length !== 4 || !nameInput.value.trim();
+    joinBtn.disabled = codeInput.value.length !== 4 || codeValid === false || !nameInput.value.trim();
+  }
+
+  // Tick + game name when the code exists, X when it doesn't
+  async function checkCode() {
+    const id = ++lookupId;
+    codeValid = null;
+    codeStatus.className = 'code-status';
+    gameNameEl.textContent = '';
+    updateForm();
+    if (codeInput.value.length !== 4) return;
+
+    const room = await RoomClient.lookup(codeInput.value);
+    if (id !== lookupId) return;
+    codeValid = !!room;
+    codeStatus.className = `code-status ${room ? 'ok' : 'bad'}`;
+    if (room) gameNameEl.textContent = (window.BARCODE_GAMES[room.game] || { title: room.game }).title;
+    updateForm();
   }
 
   codeInput.addEventListener('input', () => {
     errorEl.textContent = '';
-    updateForm();
+    checkCode();
     if (codeInput.value.length === 4 && !nameInput.value) nameInput.focus();
   });
 
@@ -62,7 +84,7 @@
     updateForm();
   });
 
-  updateForm();
+  checkCode();
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -98,8 +120,6 @@
       if (status === 'reconnecting') showNotice('Reconnecting…');
       if (status === 'open') hideNotice();
     });
-    client.on('hostAway', () => showNotice('Waiting for the host…'));
-    client.on('hostBack', hideNotice);
     client.on('closed', () => endGame('The game has ended'));
     client.on('kicked', () => endGame('You were removed from the game'));
     client.join(code, name, playerToken);
@@ -107,7 +127,6 @@
 
   async function onJoined(msg) {
     store.set(sessionStorage, SESSION_KEY, { code: msg.code, name: msg.player.name, playerToken: msg.playerToken });
-    if (!msg.hostConnected) showNotice('Waiting for the host…');
     if (msg.reconnected && !gameScreen.classList.contains('hidden')) return;
 
     try {
