@@ -1,0 +1,961 @@
+<title>Scribbled Exhibit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600&family=Karla:wght@400;600&display=swap">
+<style>
+/* Layout: one 16:9 TV frame. Back layer: a 3D white gallery (parquet, back wall, ceiling lights) rendered once and blurred like a shallow-focus lens. Front layer: the stand, vase and tag, sharp and turning. Single light look on purpose. */
+:root {
+  --paper: #f4f3ef;
+  --ink: #1d1b18;
+  --muted: #77726a;
+  --line: #dcd8cf;
+  --display: "Fraunces", Georgia, serif;
+  --body: "Karla", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 48px; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px 20px; }
+header h1 { margin: 0; font-family: var(--display); font-weight: 300; font-size: clamp(28px, 4.2vw, 46px); }
+header p { margin: 0; color: var(--muted); max-width: 58ch; line-height: 1.5; font-size: 15px; }
+.screen { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: #efece6; box-shadow: 0 0 0 1px var(--line), 0 18px 40px rgba(0,0,0,.1); }
+.screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#bg { filter: blur(3px); transform: scale(1.02); }
+#grain { opacity: .06; mix-blend-mode: overlay; pointer-events: none; }
+.vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(40,30,20,.28)); } /* shallow focus: the room melts, the exhibit stays sharp */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.controls button { appearance: none; cursor: pointer; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--body); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; padding: 8px 14px; }
+.controls button:focus-visible { outline: 3px solid #2f4fa8; outline-offset: 2px; }
+.controls span { color: var(--muted); font-size: 14px; }
+.styles { display: grid; gap: 14px; margin-top: 18px; }
+.styles h2 { margin: 0; font-family: var(--display); font-weight: 300; font-size: clamp(24px, 3vw, 34px); }
+.styles > p { margin: 0; color: var(--muted); max-width: 62ch; line-height: 1.5; font-size: 15px; }
+.style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 20px; }
+@media (max-width: 760px) { .style-grid { grid-template-columns: minmax(0, 1fr); } }
+.style-grid figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+.style-grid canvas { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; display: block; border-radius: 4px; background: #e9e6df; box-shadow: 0 0 0 1px var(--line); }
+.style-grid figcaption { display: grid; gap: 2px; }
+.style-grid figcaption b { font-family: var(--display); font-weight: 600; font-size: 18px; }
+.style-grid figcaption span { color: var(--muted); font-size: 14px; line-height: 1.45; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Scribbled</h1>
+    <p>One exhibit on a tall wooden stool in a white gallery, shot from across the room. The room is out of focus; the vase, stool and price tag are sharp. The tag is tied to the neck and turns with the vase.</p>
+  </header>
+  <div class="screen" id="screen">
+    <canvas id="bg"></canvas>
+    <canvas id="fg"></canvas>
+    <canvas id="grain" aria-hidden="true"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+  </div>
+  <div class="controls" id="controls">
+    <button type="button" id="spin">Pause turning</button>
+    <button type="button" id="focus">Room in focus</button>
+    <span>Drag across the vase to turn it by hand.</span>
+  </div>
+
+  <section class="styles">
+    <h2>Ten art directions</h2>
+    <p>The same shot, run through ten different treatments. They're quick previews of a direction, not final art: whichever you pick would be built into the real renderer properly.</p>
+    <div class="style-grid" id="styleGrid"></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const screenEl = document.getElementById('screen');
+const bgCanvas = document.getElementById('bg');
+const fgCanvas = document.getElementById('fg');
+
+function camera() {
+  const cam = new THREE.PerspectiveCamera(22, 16 / 9, 0.05, 80);
+  cam.position.set(0, 1.28, 4.6);
+  cam.lookAt(0, 1.2, 0);
+  return cam;
+}
+
+/* ================= Textures (all drawn in code) ================= */
+
+function parquetTexture() {
+  // basket-weave parquet: 2x2 blocks of four planks, alternating direction, honey tones
+  const c = document.createElement('canvas');
+  c.width = c.height = 1024;
+  const g = c.getContext('2d');
+  const block = 128;
+  const tones = ['#d9ae78', '#e0b884', '#d2a56e', '#e6c08e', '#cfa169', '#dcb27c'];
+  for (let by = 0; by < 1024; by += block) {
+    for (let bx = 0; bx < 1024; bx += block) {
+      const vertical = ((bx + by) / block) % 2 === 0;
+      for (let k = 0; k < 4; k++) {
+        g.fillStyle = tones[Math.floor(Math.random() * tones.length)];
+        const t = block / 4;
+        if (vertical) g.fillRect(bx + k * t, by, t, block);
+        else g.fillRect(bx, by + k * t, block, t);
+        // grain
+        g.globalAlpha = 0.12;
+        g.fillStyle = '#7a4a1f';
+        for (let s = 0; s < 6; s++) {
+          if (vertical) g.fillRect(bx + k * t + Math.random() * t, by, 1, block);
+          else g.fillRect(bx, by + k * t + Math.random() * t, block, 1);
+        }
+        g.globalAlpha = 1;
+        g.strokeStyle = 'rgba(80,45,15,.45)';
+        g.lineWidth = 1.5;
+        if (vertical) g.strokeRect(bx + k * t, by, t, block);
+        else g.strokeRect(bx, by + k * t, block, t);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(9, 9);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+function porcelainTexture() {
+  // u = around the vase, v = up the profile (canvas top = rim)
+  const W = 2048, H = 1024;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const blue = '#1f2f8f', blue2 = '#3a4fb8';
+  g.fillStyle = '#f2f4f8';
+  g.fillRect(0, 0, W, H);
+  // faint glaze mottling
+  for (let i = 0; i < 2500; i++) {
+    g.fillStyle = `rgba(150,165,200,${Math.random() * 0.06})`;
+    g.fillRect(Math.random() * W, Math.random() * H, 3, 3);
+  }
+  // top band: rim stripe + scroll pattern
+  // (lathe v runs along the profile, so the outer lip/neck sit around y 120-360 and the foot around y 820-900)
+  g.fillStyle = blue; g.fillRect(0, 118, W, 12); g.fillRect(0, 232, W, 10);
+  g.strokeStyle = blue; g.lineWidth = 6;
+  for (let x = 0; x < W; x += 64) {
+    g.beginPath(); g.arc(x + 20, 180, 16, Math.PI * 0.2, Math.PI * 1.7); g.stroke();
+    g.beginPath(); g.arc(x + 46, 180, 9, Math.PI * 1.1, Math.PI * 2.6); g.stroke();
+  }
+  g.fillRect(0, 300, W, 6);
+  // bottom band: lotus petals
+  const foot = 892, by = 800;
+  g.fillStyle = blue; g.fillRect(0, by - 12, W, 8); g.fillRect(0, foot, W, 14);
+  for (let x = 0; x < W; x += 56) {
+    g.beginPath(); g.moveTo(x, foot); g.quadraticCurveTo(x + 28, by - 30, x + 56, foot);
+    g.fillStyle = blue2; g.fill();
+    g.beginPath(); g.moveTo(x + 12, foot); g.quadraticCurveTo(x + 28, by + 20, x + 44, foot);
+    g.fillStyle = '#f2f4f8'; g.fill();
+  }
+  // main scene, drawn twice around: plum branch, blossoms, two magpies
+  for (let rep = 0; rep < 4; rep++) {
+    const ox = 0;
+    g.save(); g.translate(rep * W / 4, 250); g.scale(0.5, 0.66);
+    g.strokeStyle = blue; g.lineCap = 'round';
+    g.lineWidth = 26;
+    g.beginPath(); g.moveTo(ox + 40, 760); g.bezierCurveTo(ox + 260, 690, ox + 420, 720, ox + 640, 600); g.bezierCurveTo(ox + 760, 540, ox + 860, 520, ox + 1000, 470); g.stroke();
+    g.lineWidth = 12;
+    g.beginPath(); g.moveTo(ox + 420, 700); g.bezierCurveTo(ox + 470, 560, ox + 520, 470, ox + 610, 360); g.stroke();
+    g.beginPath(); g.moveTo(ox + 760, 540); g.bezierCurveTo(ox + 800, 420, ox + 900, 330, ox + 980, 240); g.stroke();
+    g.lineWidth = 6;
+    g.beginPath(); g.moveTo(ox + 600, 380); g.lineTo(ox + 690, 300); g.moveTo(ox + 900, 330); g.lineTo(ox + 860, 250); g.stroke();
+    // blossoms
+    const blossom = (x, y, r) => {
+      for (let p = 0; p < 5; p++) {
+        const a = p * Math.PI * 2 / 5;
+        g.beginPath(); g.arc(x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, r * 0.62, 0, Math.PI * 2);
+        g.fillStyle = '#f2f4f8'; g.fill(); g.lineWidth = 3.5; g.strokeStyle = blue2; g.stroke();
+      }
+      g.beginPath(); g.arc(x, y, r * 0.3, 0, Math.PI * 2); g.fillStyle = blue; g.fill();
+    };
+    [[640, 330, 26], [700, 290, 20], [560, 430, 22], [980, 250, 24], [880, 300, 18], [300, 700, 22], [1000, 470, 20], [180, 740, 18]]
+      .forEach(([x, y, r]) => blossom(ox + x, y, r));
+    // magpies
+    const bird = (x, y, flip) => {
+      g.save(); g.translate(x, y); g.scale(flip ? -1 : 1, 1);
+      g.fillStyle = blue;
+      g.beginPath(); g.ellipse(0, 0, 70, 38, -0.25, 0, Math.PI * 2); g.fill();          // body
+      g.beginPath(); g.arc(-62, -30, 26, 0, Math.PI * 2); g.fill();                     // head
+      g.beginPath(); g.moveTo(-86, -32); g.lineTo(-112, -26); g.lineTo(-86, -22); g.fill(); // beak
+      g.beginPath(); g.moveTo(50, 10); g.lineTo(170, 70); g.lineTo(160, 86); g.lineTo(40, 30); g.fill(); // tail
+      g.fillStyle = '#f2f4f8';
+      g.beginPath(); g.ellipse(-4, 10, 34, 14, -0.25, 0, Math.PI * 2); g.fill();        // white belly
+      g.beginPath(); g.arc(-68, -36, 6, 0, Math.PI * 2); g.fill();                      // eye
+      g.restore();
+    };
+    bird(ox + 330, 610, false);
+    bird(ox + 830, 400, true);
+    g.restore();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+function tagTexture() {
+  // kraft card with a scribbled-out price; the eyelet end is on the left
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 600;
+  const g = c.getContext('2d');
+  g.fillStyle = '#c69c6d';
+  g.fillRect(0, 0, 1024, 600);
+  for (let i = 0; i < 9000; i++) {
+    const t = Math.random();
+    g.fillStyle = t < 0.5 ? `rgba(120,80,40,${Math.random() * 0.12})` : `rgba(255,235,200,${Math.random() * 0.12})`;
+    g.fillRect(Math.random() * 1024, Math.random() * 600, 2 + Math.random() * 3, 1 + Math.random() * 2);
+  }
+  g.fillStyle = '#2b1d12';
+  g.font = '700 190px Georgia, serif';
+  g.textBaseline = 'middle';
+  g.fillText('£', 330, 310);
+  g.fillText('4,800', 460, 310);
+  // marker scribble over the digits
+  g.strokeStyle = '#0d0b0a';
+  g.lineWidth = 34;
+  g.lineCap = g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(460, 250);
+  for (let i = 0; i < 9; i++) {
+    const x = 470 + i * 52;
+    g.bezierCurveTo(x + 10, 170 + (i % 2) * 40, x + 30, 430 - (i % 2) * 30, x + 52, 260 + (i % 3) * 30);
+  }
+  g.stroke();
+  g.lineWidth = 22;
+  g.beginPath(); g.moveTo(450, 380); g.bezierCurveTo(600, 300, 760, 420, 960, 330); g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/* ================= Background: the gallery (rendered, then blurred) ================= */
+
+const bgRenderer = new THREE.WebGLRenderer({ canvas: bgCanvas, antialias: true, preserveDrawingBuffer: true });
+bgRenderer.outputEncoding = THREE.sRGBEncoding;
+bgRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+bgRenderer.toneMappingExposure = 1.55;
+const bgScene = new THREE.Scene();
+bgScene.background = new THREE.Color(0xf3f1ec);
+const bgCam = camera();
+
+bgScene.add(new THREE.HemisphereLight(0xffffff, 0xe2d2b8, 1.05));
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), new THREE.MeshStandardMaterial({ color: 0xfbfaf7, roughness: 1 }));
+wall.position.set(0, 4, -6);
+bgScene.add(wall);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ map: parquetTexture(), roughness: 0.45, metalness: 0.05 }));
+floor.rotation.x = -Math.PI / 2;
+floor.position.z = 4;
+bgScene.add(floor);
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 1 }));
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.set(0, 4.2, 4);
+bgScene.add(ceiling);
+// track-light rails and a pendant fixture
+[-1.6, 1.6].forEach((x) => {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 12), new THREE.MeshStandardMaterial({ color: 0x9a968e }));
+  rail.position.set(x, 4.17, 0);
+  bgScene.add(rail);
+});
+const fixture = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 32), new THREE.MeshStandardMaterial({ color: 0xbfbcb5, emissive: 0xffffff, emissiveIntensity: 0.6 }));
+fixture.position.set(0, 4.15, -2.5);
+bgScene.add(fixture);
+// warm washes of light on the wall and floor
+[[-3.2, 0.35], [0, 0.45], [3.2, 0.35]].forEach(([x, i]) => {
+  const s = new THREE.SpotLight(0xfff1dc, i, 14, 0.42, 0.85);
+  s.position.set(x, 4, -2.5);
+  s.target.position.set(x, 1.4, -6);
+  bgScene.add(s, s.target);
+});
+const floorWash = new THREE.SpotLight(0xffe9c8, 0.55, 14, 0.7, 0.9);
+floorWash.position.set(0, 4, 1);
+floorWash.target.position.set(0, 0, 0);
+bgScene.add(floorWash, floorWash.target);
+// a gallery bench either side, against the back wall, in the same wood as the stool
+const benchWood = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.55 });
+const bench = new THREE.Group();
+const benchSeat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.42), benchWood);
+benchSeat.position.y = 0.44;
+bench.add(benchSeat);
+[-0.72, 0.72].forEach((x) => {
+  [-0.15, 0.15].forEach((z) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.41, 0.05), benchWood);
+    leg.position.set(x, 0.205, z);
+    bench.add(leg);
+  });
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.34), benchWood);
+  foot.position.set(x, 0.12, 0);
+  bench.add(foot);
+});
+const benchShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6), new THREE.MeshBasicMaterial({ color: 0x3a2412, transparent: true, opacity: 0.22 }));
+benchShadow.rotation.x = -Math.PI / 2;
+benchShadow.position.set(0.04, 0.002, 0.04);
+bench.add(benchShadow);
+bench.position.set(-1.9, 0, -5.72); // against the wall
+bgScene.add(bench);
+const bench2 = bench.clone();
+bench2.position.x = 1.9;
+bgScene.add(bench2);
+
+// skirting line along the wall's foot
+const skirting = new THREE.Mesh(new THREE.BoxGeometry(30, 0.06, 0.02), new THREE.MeshStandardMaterial({ color: 0xd8d4cb }));
+skirting.position.set(0, 0.03, -5.98);
+bgScene.add(skirting);
+
+/* ================= Foreground: stand, vase, tag (sharp) ================= */
+
+const fgRenderer = new THREE.WebGLRenderer({ canvas: fgCanvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+fgRenderer.outputEncoding = THREE.sRGBEncoding;
+fgRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+fgRenderer.toneMappingExposure = 1.15;
+fgRenderer.shadowMap.enabled = true;
+fgRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const fgScene = new THREE.Scene();
+const fgCam = camera();
+
+fgScene.add(new THREE.HemisphereLight(0xffffff, 0xcaa77a, 0.35));
+const key = new THREE.SpotLight(0xfff4e4, 1.25, 20, 0.45, 0.7);
+key.position.set(0.5, 4.6, 1.1);
+key.target.position.set(0, 0.9, 0);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 5;
+key.shadow.bias = -0.0004;
+fgScene.add(key, key.target);
+const fill = new THREE.DirectionalLight(0xdfe6ff, 0.35);
+fill.position.set(-3, 2, 2);
+fgScene.add(fill);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+rimLight.position.set(0, 3, -4);
+fgScene.add(rimLight);
+
+// shadow-catcher floor (invisible except for shadows)
+const catcher = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.ShadowMaterial({ opacity: 0.38 }));
+catcher.rotation.x = -Math.PI / 2;
+catcher.receiveShadow = true;
+fgScene.add(catcher);
+
+// tall square wooden stool: seat, four square legs, rungs; the frame cuts it off at the legs
+function woodTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 1024;
+  const g = c.getContext('2d');
+  g.fillStyle = '#9c6a3e';
+  g.fillRect(0, 0, 512, 1024);
+  for (let i = 0; i < 160; i++) {
+    const x = Math.random() * 512;
+    const w = 1 + Math.random() * 4;
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? '70,40,18' : '190,140,90'},${0.08 + Math.random() * 0.18})`;
+    g.beginPath();
+    g.moveTo(x, 0);
+    for (let y = 0; y <= 1024; y += 64) g.lineTo(x + Math.sin(y / 140 + i) * 6, y);
+    g.lineTo(x + w, 1024);
+    for (let y = 1024; y >= 0; y -= 64) g.lineTo(x + w + Math.sin(y / 140 + i) * 6, y);
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 8;
+  return tex;
+}
+const wood = new THREE.MeshPhysicalMaterial({ map: woodTexture(), roughness: 0.55, clearcoat: 0.25, clearcoatRoughness: 0.5 });
+const stand = new THREE.Group();
+const STAND_H = 0.78;
+const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.5), wood);
+seat.position.y = STAND_H - 0.0175;
+stand.add(seat);
+[[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => {
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.045, STAND_H - 0.035, 0.045), wood);
+  leg.position.set(sx * 0.21, (STAND_H - 0.035) / 2, sz * 0.21);
+  stand.add(leg);
+});
+[0.26, 0.5].forEach((y, k) => {
+  // rungs on alternating sides at two heights
+  const along = k % 2 === 0;
+  [-1, 1].forEach((side) => {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(along ? 0.42 : 0.026, 0.026, along ? 0.026 : 0.42), wood);
+    rung.position.set(along ? 0 : side * 0.21, y, along ? side * 0.21 : 0);
+    stand.add(rung);
+  });
+});
+stand.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+fgScene.add(stand);
+
+// porcelain vase: baluster body, narrow neck, flared lip
+const PROFILE = [
+  [0.0, 0.0], [0.27, 0.0], [0.29, 0.02], [0.3, 0.06], [0.38, 0.22], [0.47, 0.42], [0.52, 0.6], [0.52, 0.72],
+  [0.47, 0.9], [0.36, 1.08], [0.24, 1.22], [0.18, 1.32], [0.17, 1.42], [0.2, 1.52], [0.26, 1.6], [0.27, 1.62], [0.235, 1.62], [0.15, 1.5],
+].map(([r, y]) => new THREE.Vector2(r, y));
+const VASE_SCALE = 0.48;
+const vaseGroup = new THREE.Group();
+vaseGroup.position.y = STAND_H;
+const vase = new THREE.Mesh(
+  new THREE.LatheGeometry(PROFILE, 128),
+  new THREE.MeshPhysicalMaterial({ map: porcelainTexture(), roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, side: THREE.DoubleSide })
+);
+vase.scale.setScalar(VASE_SCALE);
+vase.castShadow = true;
+vase.receiveShadow = true;
+vaseGroup.add(vase);
+fgScene.add(vaseGroup);
+
+// kraft tag: rectangle with a clipped point at the eyelet end, a reinforced hole, tied to the neck with twine
+const TW = 0.3, TH = 0.17;
+const shape = new THREE.Shape();
+shape.moveTo(0, -TH / 2);
+shape.lineTo(TW, -TH / 2);
+shape.lineTo(TW, TH / 2);
+shape.lineTo(0, TH / 2);
+shape.lineTo(-0.07, TH / 4);
+shape.lineTo(-0.07, -TH / 4);
+shape.closePath();
+const hole = new THREE.Path();
+hole.absarc(-0.025, 0, 0.014, 0, Math.PI * 2, true);
+shape.holes.push(hole);
+const tagGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.003, bevelEnabled: false, curveSegments: 24 });
+// map the card texture across the face: x -0.07..TW → u 0..1, y -TH/2..TH/2 → v 0..1
+const uv = tagGeo.attributes.uv, pos = tagGeo.attributes.position;
+for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + 0.07) / (TW + 0.07), (pos.getY(i) + TH / 2) / TH);
+const tag = new THREE.Mesh(tagGeo, new THREE.MeshStandardMaterial({ map: tagTexture(), roughness: 0.9, side: THREE.DoubleSide }));
+tag.castShadow = true;
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.006, 8, 24), new THREE.MeshStandardMaterial({ color: 0x6b3a22, roughness: 0.6 }));
+ring.position.set(-0.025, 0, 0.004);
+
+// the tag hangs from a pivot at the eyelet so it can sway
+const tagPivot = new THREE.Group();
+const NECK_Y = 1.36 * VASE_SCALE;        // height of the neck on the vase (in group space)
+const NECK_R = 0.175 * VASE_SCALE;
+const hang = new THREE.Group();          // eyelet sits here
+hang.position.set(NECK_R + 0.06, NECK_Y - 0.13, 0.04);
+tagPivot.add(tag, ring);
+tag.position.set(0.025, 0, 0);           // eyelet at the pivot origin
+ring.position.x += 0.025;
+tagPivot.rotation.z = -0.42;             // tips down from the eyelet, price still readable
+tagPivot.rotation.y = -0.35;
+hang.add(tagPivot);
+vaseGroup.add(hang);
+
+// twine: a loop round the neck, then down to the eyelet
+const loop = [];
+for (let i = 0; i <= 24; i++) {
+  const a = (i / 24) * Math.PI * 2;
+  loop.push(new THREE.Vector3(Math.cos(a) * (NECK_R + 0.006), NECK_Y, Math.sin(a) * (NECK_R + 0.006)));
+}
+const twineMat = new THREE.MeshStandardMaterial({ color: 0xc8a676, roughness: 1 });
+const loopMesh = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(loop, true), 64, 0.0045, 6, true), twineMat);
+const drop = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+  new THREE.Vector3(NECK_R, NECK_Y, 0.02),
+  new THREE.Vector3(NECK_R + 0.035, NECK_Y - 0.05, 0.04),
+  new THREE.Vector3(NECK_R + 0.055, NECK_Y - 0.1, 0.04),
+  hang.position.clone(),
+]), 32, 0.0045, 6), twineMat);
+loopMesh.castShadow = drop.castShadow = true;
+vaseGroup.add(loopMesh, drop);
+
+/* ================= Sizing, motion, controls ================= */
+
+(function grain() {
+  const c = document.getElementById('grain');
+  c.width = 640; c.height = 360;
+  const g = c.getContext('2d');
+  const img = g.createImageData(640, 360);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 128 + (Math.random() - 0.5) * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+})();
+
+// image-based lighting: the foreground reflects the actual gallery
+const pmrem = new THREE.PMREMGenerator(fgRenderer);
+fgScene.environment = pmrem.fromScene(bgScene, 0.03).texture;
+
+function resize() {
+  const w = screenEl.clientWidth, h = screenEl.clientHeight;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  [bgRenderer, fgRenderer].forEach((r) => { r.setPixelRatio(dpr); r.setSize(w, h, false); });
+  [bgCam, fgCam].forEach((c) => { c.aspect = w / h; c.updateProjectionMatrix(); });
+  bgRenderer.render(bgScene, bgCam); // the room never moves: draw it once per size
+}
+resize();
+new ResizeObserver(resize).observe(screenEl);
+
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let spinning = false; // stands still; drag or press Turn
+let angle = 0.9;
+let velocity = 0;
+let dragging = false, lastX = 0;
+let last = performance.now();
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (!dragging) {
+    velocity *= 0.94;
+    angle += velocity + (spinning ? dt * 0.35 : 0);
+  }
+  vaseGroup.rotation.y = angle;
+  // the tag swings a little as the vase turns
+  const swing = Math.sin(now / 900) * 0.06 + velocity * 4;
+  tagPivot.rotation.x = swing;
+  fgRenderer.render(fgScene, fgCam);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+screenEl.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; screenEl.setPointerCapture(e.pointerId); });
+screenEl.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = (e.clientX - lastX) / screenEl.clientWidth;
+  lastX = e.clientX;
+  velocity = dx * 6;
+  angle += velocity;
+});
+screenEl.addEventListener('pointerup', () => { dragging = false; });
+screenEl.style.touchAction = 'pan-y';
+screenEl.style.cursor = 'grab';
+
+const spinBtn = document.getElementById('spin');
+spinBtn.textContent = spinning ? 'Pause turning' : 'Turn';
+spinBtn.addEventListener('click', () => { spinning = !spinning; spinBtn.textContent = spinning ? 'Pause turning' : 'Turn'; });
+const focusBtn = document.getElementById('focus');
+focusBtn.addEventListener('click', () => {
+  const sharp = bgCanvas.style.filter === 'none';
+  bgCanvas.style.filter = sharp ? '' : 'none';
+  bgCanvas.style.transform = sharp ? '' : 'none';
+  focusBtn.textContent = sharp ? 'Room in focus' : 'Room out of focus';
+});
+
+/* ================= Art directions: the same scene re-rendered with its own materials and lights ================= */
+
+// every object gets a role, so each style can dress the same scene its own way
+wall.userData.role = 'wall';
+floor.userData.role = 'floor';
+ceiling.userData.role = 'ceiling';
+fixture.userData.role = 'fixture';
+[bench, bench2].forEach((b) => b.traverse((o) => {
+  if (o.isMesh) o.userData.role = o.geometry === benchShadow.geometry ? 'blob' : 'wood';
+}));
+bgScene.traverse((o) => { if (o.isMesh && !o.userData.role) o.userData.role = 'trim'; });
+stand.traverse((o) => { if (o.isMesh) o.userData.role = 'wood'; });
+vase.userData.role = 'vase';
+tag.userData.role = 'tag';
+ring.userData.role = 'ring';
+loopMesh.userData.role = drop.userData.role = 'twine';
+
+const SR_W = 960, SR_H = 540;
+const styleRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+styleRenderer.setPixelRatio(1);
+styleRenderer.shadowMap.enabled = true;
+styleRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const TEX = { porcelain: vase.material.map, parquet: floor.material.map, wood: stand.children[0].material.map, tag: tag.material.map };
+
+function canvasTex(w, h, draw, opts = {}) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding;
+  if (opts.repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(opts.repeat, opts.repeat); }
+  if (opts.nearest) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; }
+  return t;
+}
+const toonRamp = (steps) => {
+  const t = canvasTex(steps, 1, (g) => { for (let i = 0; i < steps; i++) { const v = Math.round(70 + (185 * i) / (steps - 1)); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(i, 0, 1, 1); } }, { nearest: true });
+  t.encoding = THREE.LinearEncoding;
+  return t;
+};
+const noiseTex = (alpha = 40, size = 256) => canvasTex(size, size, (g, w, h) => {
+  const img = g.createImageData(w, h);
+  for (let i = 0; i < img.data.length; i += 4) { const v = 128 + (Math.random() - 0.5) * alpha * 2; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+}, { repeat: 6 });
+const kraftTex = (base) => canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 6000; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.07)'; g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 4, 1 + Math.random() * 2); }
+}, { repeat: 2 });
+const hatchTex = () => canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#f6efdd'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(40,30,25,.35)'; g.lineWidth = 2;
+  for (let x = -h; x < w; x += 14) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + h, 0); g.stroke(); }
+}, { repeat: 8 });
+const checkerTex = (a, b) => canvasTex(256, 256, (g, w, h) => {
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? a : b; g.fillRect(x * 32, y * 32, 32, 32); }
+}, { repeat: 6, nearest: true });
+const gradientTex = (stops) => canvasTex(4, 512, (g, w, h) => {
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  stops.forEach(([o, c]) => gr.addColorStop(o, c));
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+
+/** A fresh copy of the whole scene (room + benches + stool + vase), without its lights */
+function cloneWorld() {
+  const world = new THREE.Group();
+  [...bgScene.children, ...fgScene.children].forEach((o) => {
+    if (o.isLight || o === catcher || (!o.isMesh && !o.isGroup)) return;
+    world.add(o.clone(true));
+  });
+  return world;
+}
+
+/** Restyle every mesh by role; `pick(role, mesh)` returns a material, or null to hide the mesh */
+function dress(world, pick) {
+  const meshes = [];
+  world.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  meshes.forEach((o) => {
+    const m = pick(o.userData.role || 'trim', o);
+    if (m === null) { o.visible = false; return; }
+    o.material = m;
+    o.castShadow = !['wall', 'floor', 'ceiling', 'trim', 'fixture'].includes(o.userData.role); // the room itself never blocks the light
+    o.receiveShadow = true;
+  });
+}
+
+/** Black inverted-hull outline around the vase, and edge lines on the boxy pieces and the tag */
+function outline(world, color = 0x111111, hull = 1.03, opts = {}) {
+  const lineMat = new THREE.LineBasicMaterial({ color });
+  const extra = [];
+  world.traverse((o) => {
+    if (!o.isMesh || !o.visible) return;
+    const role = o.userData.role;
+    if (role === 'vase') {
+      const h = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ color, side: THREE.BackSide }));
+      h.scale.setScalar(hull);
+      extra.push([o, h]);
+    } else if (role === 'wood' || role === 'tag' || (opts.room && ['trim', 'fixture'].includes(role))) {
+      extra.push([o, new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), lineMat)]);
+    }
+  });
+  extra.forEach(([o, e]) => o.add(e));
+}
+
+function lowPolyVase(world, segments) {
+  const pts = PROFILE.filter((_, i) => i % 2 === 0 || i === PROFILE.length - 1);
+  world.traverse((o) => { if (o.isMesh && o.userData.role === 'vase') o.geometry = new THREE.LatheGeometry(pts, segments); });
+}
+
+function edgesOnly(world, colors, glow = false) {
+  // swap every visible mesh for its edges (blueprint / neon)
+  const meshes = [];
+  world.traverse((o) => { if (o.isMesh && o.visible) meshes.push(o); });
+  meshes.forEach((o) => {
+    const c = colors[o.userData.role];
+    if (c === undefined) { o.visible = false; return; }
+    const geo = o.userData.role === 'vase' ? new THREE.WireframeGeometry(new THREE.LatheGeometry(PROFILE.filter((_, i) => i % 2 === 0), 16)) : new THREE.EdgesGeometry(o.geometry, 20);
+    const lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: c }));
+    o.add(lines);
+    o.material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false });
+  });
+}
+
+/** Directional shadows cover the whole room (and refresh their camera, which three.js won't do by itself) */
+function wideShadow(light) {
+  Object.assign(light.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 0.5, far: 40 });
+  light.shadow.camera.updateProjectionMatrix();
+  light.shadow.bias = -0.0005;
+}
+
+const std = (o) => new THREE.MeshStandardMaterial(o);
+const toon = (o, steps = 3) => new THREE.MeshToonMaterial({ gradientMap: toonRamp(steps), ...o });
+
+const ART = [
+  {
+    name: 'Cel-shaded cartoon', note: 'Hard-edged light and shade with ink outlines, like an animated show.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xfff6e6);
+      dress(w, (r) => ({ wall: toon({ color: 0xfff3e2 }), floor: toon({ map: TEX.parquet }), ceiling: toon({ color: 0xfff3e2 }), wood: toon({ map: TEX.wood }), vase: toon({ map: TEX.porcelain }), tag: toon({ map: TEX.tag, side: THREE.DoubleSide }), blob: null, ring: toon({ color: 0x7a3d22 }), twine: toon({ color: 0xc8a676 }), fixture: toon({ color: 0xd8d2c6 }) }[r] || toon({ color: 0xcfc8bb })));
+      outline(w);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(2, 5, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+      wideShadow(sun); scene.add(sun);
+    },
+  },
+  {
+    name: 'Clay stop-motion', note: 'Matte plasticine with fingerprint texture and soft warm studio light.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xefe4d6);
+      const bump = noiseTex(60);
+      const clay = (c, map) => std({ color: c, map, roughness: 1, bumpMap: bump, bumpScale: 0.02 });
+      dress(w, (r) => ({ wall: clay(0xeee3d4), floor: clay(0xd9a86e), ceiling: clay(0xeee3d4), wood: clay(0xa8693e), vase: clay(0xffffff, TEX.porcelain), tag: clay(0xd6a873, TEX.tag), blob: null, ring: clay(0x7a3d22), twine: clay(0xd8b88a), fixture: clay(0xd8d2c6) }[r] || clay(0xcfc3b2)));
+      scene.add(new THREE.HemisphereLight(0xfff4e6, 0xc9a07a, 0.8));
+      const key = new THREE.SpotLight(0xffe8cc, 1.1, 20, 0.6, 0.9); key.position.set(2.5, 5, 3); key.castShadow = true; key.shadow.radius = 8; key.shadow.mapSize.set(2048, 2048); scene.add(key);
+    },
+  },
+  {
+    name: 'Low poly', note: 'Faceted shapes and flat pastel colour, like an indie game.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xf4efe6);
+      lowPolyVase(w, 9);
+      const flat = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+      dress(w, (r) => ({ wall: flat(0xf3ede2), floor: flat(0xe6c08e), ceiling: flat(0xf3ede2), wood: flat(0xc98b5a), vase: flat(0x4a6fd8), tag: flat(0xe2b984), blob: null, ring: flat(0x7a3d22), twine: flat(0xd8b88a), fixture: flat(0xd8d2c6) }[r] || flat(0xd6cfc2)));
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xd9b48a, 0.75));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(-3, 5, 4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+      wideShadow(sun); scene.add(sun);
+    },
+  },
+  {
+    name: 'Paper craft', note: 'Everything cut from coloured card, with crisp drop shadows.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xeee5d3);
+      lowPolyVase(w, 14);
+      const card = (c) => new THREE.MeshLambertMaterial({ map: kraftTex(c), flatShading: true });
+      dress(w, (r) => ({ wall: card('#efe6d4'), floor: card('#c9965c'), ceiling: card('#efe6d4'), wood: card('#8a5534'), vase: card('#2f4fa8'), tag: card('#c69c6d'), blob: null, ring: card('#6b3a22'), twine: card('#d8b88a'), fixture: card('#d8d2c6') }[r] || card('#d6cdbd')));
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-2.5, 4, 5); sun.castShadow = true; sun.shadow.radius = 1; sun.shadow.mapSize.set(2048, 2048);
+      wideShadow(sun); scene.add(sun);
+    },
+  },
+  {
+    name: 'Ink and paper', note: 'Pen outlines on cream paper with hatched shading.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xf6efdd);
+      const paper = new THREE.MeshBasicMaterial({ color: 0xf6efdd });
+      const hatch = new THREE.MeshBasicMaterial({ map: hatchTex() });
+      dress(w, (r) => ({ wall: paper, floor: hatch, ceiling: paper, wood: paper, vase: new THREE.MeshBasicMaterial({ map: TEX.porcelain }), tag: new THREE.MeshBasicMaterial({ map: TEX.tag, side: THREE.DoubleSide }), blob: null, twine: new THREE.MeshBasicMaterial({ color: 0x2a1d14 }), ring: new THREE.MeshBasicMaterial({ color: 0x2a1d14 }) }[r] || paper));
+      outline(w, 0x1e1712, 1.035, { room: true });
+    },
+    post: 'paper',
+  },
+  {
+    name: 'Marble museum at night', note: 'A dark gallery and one dramatic spotlight on a white marble vase.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x0b0b0d);
+      const marble = canvasTex(1024, 512, (g, ww, hh) => {
+        g.fillStyle = '#f1eee8'; g.fillRect(0, 0, ww, hh);
+        for (let i = 0; i < 40; i++) { g.strokeStyle = `rgba(120,120,130,${0.08 + Math.random() * 0.15})`; g.lineWidth = 1 + Math.random() * 2; g.beginPath(); let x = Math.random() * ww, y = Math.random() * hh; g.moveTo(x, y); for (let k = 0; k < 8; k++) { x += (Math.random() - 0.3) * 120; y += (Math.random() - 0.5) * 60; g.lineTo(x, y); } g.stroke(); }
+      });
+      dress(w, (r) => ({ wall: std({ color: 0x1a1a1f, roughness: 1 }), floor: std({ color: 0x1c1b1d, roughness: 0.25, metalness: 0.2 }), ceiling: std({ color: 0x0e0e10 }), wood: std({ color: 0x141414, roughness: 0.4 }), vase: new THREE.MeshPhysicalMaterial({ map: marble, roughness: 0.25, clearcoat: 0.6 }), tag: std({ map: TEX.tag, roughness: 0.9, side: THREE.DoubleSide }), blob: null }[r] || std({ color: 0x2a2a2e })));
+      scene.add(new THREE.AmbientLight(0x404050, 0.25));
+      const spot = new THREE.SpotLight(0xfff2dc, 3, 12, 0.22, 0.55); spot.position.set(0, 5, 1.2); spot.target.position.set(0, 1.0, 0); spot.castShadow = true; spot.shadow.mapSize.set(2048, 2048);
+      scene.add(spot, spot.target);
+    },
+    tone: true,
+  },
+  {
+    name: 'Blueprint', note: 'Technical drawing: white and cyan lines on blue.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x0c3a74);
+      edgesOnly(w, { wood: 0xffffff, vase: 0x8fe3ff, tag: 0xffffff, ring: 0xffffff, twine: 0x8fe3ff, trim: 0x5f8fc7 });
+      const grid = new THREE.GridHelper(30, 60, 0x2f66a8, 0x2f66a8); scene.add(grid);
+      const wallGrid = new THREE.GridHelper(30, 60, 0x2a5c9a, 0x2a5c9a); wallGrid.rotation.x = Math.PI / 2; wallGrid.position.set(0, 4, -5.99); scene.add(wallGrid);
+    },
+  },
+  {
+    name: 'Neon night', note: 'Glowing outlines in a dark room, like a synthwave poster.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x07040f);
+      edgesOnly(w, { wood: 0xff3fb4, vase: 0x3ff2ff, tag: 0xffd84a, ring: 0xffd84a, twine: 0xffd84a, trim: 0x7a3fff });
+      const grid = new THREE.GridHelper(30, 40, 0xff3fb4, 0x6a1f7a); scene.add(grid);
+    },
+    post: 'bloom',
+  },
+  {
+    name: 'PS1 retro', note: 'Low-res 3D with wobbly textures and chunky pixels, like a 1997 console game.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x9a9488);
+      scene.fog = new THREE.Fog(0x9a9488, 5, 14);
+      lowPolyVase(w, 10);
+      const crunch = (t) => { const c = t.clone(); c.magFilter = c.minFilter = THREE.NearestFilter; c.generateMipmaps = false; c.needsUpdate = true; return c; };
+      const lam = (o) => new THREE.MeshLambertMaterial(o);
+      dress(w, (r) => ({ wall: lam({ color: 0xd8d2c4 }), floor: lam({ map: crunch(TEX.parquet) }), ceiling: lam({ color: 0xd0cabc }), wood: lam({ map: crunch(TEX.wood) }), vase: lam({ map: crunch(TEX.porcelain) }), tag: lam({ map: crunch(TEX.tag), side: THREE.DoubleSide }), blob: null }[r] || lam({ color: 0xbdb6a8 })));
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      const sun = new THREE.DirectionalLight(0xfff0d8, 0.7); sun.position.set(2, 5, 3); scene.add(sun);
+    },
+    lowRes: [320, 180],
+  },
+  {
+    name: 'Vaporwave', note: 'Pastel gradient sky, checkered floor and a chrome-pink stool.',
+    build(scene, w) {
+      scene.background = gradientTex([[0, '#2b1055'], [0.55, '#d53a9d'], [1, '#ffb88c']]);
+      const sun = new THREE.Mesh(new THREE.CircleGeometry(1.6, 64), new THREE.MeshBasicMaterial({ map: gradientTex([[0, '#ffe66d'], [1, '#ff4fa3']]) }));
+      sun.position.set(0, 2.4, -5.9); scene.add(sun);
+      dress(w, (r) => ({ wall: null, ceiling: null, floor: std({ map: checkerTex('#ff6ad5', '#3a1c71'), roughness: 0.3, metalness: 0.3 }), wood: std({ color: 0xff8fd6, roughness: 0.2, metalness: 0.6 }), vase: new THREE.MeshPhysicalMaterial({ color: 0x7ff3e6, roughness: 0.15, clearcoat: 1 }), tag: std({ map: TEX.tag, side: THREE.DoubleSide }), blob: null, trim: null, fixture: null }[r] || std({ color: 0xc8b6ff })));
+      scene.add(new THREE.HemisphereLight(0xffb8f0, 0x5a2a9a, 0.9));
+      const key = new THREE.DirectionalLight(0xffffff, 0.6); key.position.set(-2, 4, 4); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+      wideShadow(key); scene.add(key);
+    },
+  },
+  {
+    name: 'Film noir', note: 'Real hard light through blinds onto a black and white set.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x111111);
+      const grey = (v, rough = 0.8) => std({ color: new THREE.Color(v, v, v), roughness: rough });
+      const bw = (t) => std({ map: t, roughness: 0.4, color: 0xffffff });
+      dress(w, (r) => ({ wall: grey(0.6), floor: grey(0.25, 0.35), ceiling: grey(0.2), wood: grey(0.15, 0.5), vase: bw(TEX.porcelain), tag: grey(0.75), blob: null }[r] || grey(0.4)));
+      scene.add(new THREE.AmbientLight(0xffffff, 0.08));
+      const spot = new THREE.SpotLight(0xffffff, 2.2, 20, 0.5, 0.15); spot.position.set(3.5, 3.2, 2); spot.target.position.set(0, 1, -2); spot.castShadow = true; spot.shadow.mapSize.set(2048, 2048);
+      scene.add(spot, spot.target);
+      // venetian blind slats between the light and the set throw striped shadows
+      for (let i = 0; i < 10; i++) {
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.04, 0.02), new THREE.MeshBasicMaterial({ colorWrite: false }));
+        slat.position.set(2.6, 2.4 + i * 0.11, 1.4); slat.lookAt(spot.position); slat.castShadow = true; scene.add(slat);
+      }
+    },
+    tone: true, grey: true,
+  },
+  {
+    name: 'Golden hour photo', note: 'The realistic look, lit by low evening sun through a window.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xf3e3cc);
+      dress(w, (r, o) => (r === 'blob' ? null : o.material));
+      scene.add(new THREE.HemisphereLight(0xbfd3ff, 0xc89060, 0.45));
+      const sun = new THREE.DirectionalLight(0xffb36b, 2.2); sun.position.set(-6, 2.2, 3); sun.target.position.set(0, 0.8, -2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+      wideShadow(sun); scene.add(sun, sun.target);
+    },
+    tone: true,
+  },
+  {
+    name: 'Bidiots-style crayon cartoon', note: 'Inspired by Bidiots: thick wobbly hand-drawn outlines, loud flat colour, crayon texture.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xfde9a8);
+      const flat = (c, map) => new THREE.MeshBasicMaterial({ color: c, map });
+      const crayon = (c) => flat(0xffffff, kraftTex(c));
+      dress(w, (r) => ({ wall: crayon('#ffe28a'), floor: crayon('#ff9b54'), ceiling: crayon('#ffe28a'), wood: crayon('#c0392b'), vase: flat(0xffffff, TEX.porcelain), tag: flat(0xffffff, TEX.tag), blob: null, ring: flat(0x222222), twine: flat(0x222222), fixture: crayon('#ffffff') }[r] || crayon('#f6c445')));
+      outline(w, 0x111111, 1.07, { room: true });
+    },
+    post: ['wobble', 'crayon'],
+  },
+  {
+    name: "Fakin' It-style pop art", note: "Inspired by Fakin' It: flat pop-art colour, chunky outlines and halftone dots.",
+    build(scene, w) {
+      scene.background = new THREE.Color(0xffd23f);
+      const dots = (bg, dot) => canvasTex(128, 128, (g, ww, hh) => { g.fillStyle = bg; g.fillRect(0, 0, ww, hh); g.fillStyle = dot; for (let y = 8; y < hh; y += 16) for (let x = (y / 16) % 2 ? 16 : 8; x < ww; x += 16) { g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); } }, { repeat: 10 });
+      const t = (o) => toon(o, 2);
+      dress(w, (r) => ({ wall: new THREE.MeshBasicMaterial({ map: dots('#ffd23f', '#f5a623') }), floor: new THREE.MeshBasicMaterial({ map: dots('#1fb5ad', '#178f88') }), ceiling: new THREE.MeshBasicMaterial({ color: 0xffd23f }), wood: t({ color: 0xff4d6d }), vase: t({ map: TEX.porcelain }), tag: t({ map: TEX.tag, side: THREE.DoubleSide }), blob: null, ring: t({ color: 0x222222 }), twine: t({ color: 0x222222 }) }[r] || t({ color: 0xffffff })));
+      outline(w, 0x111111, 1.06);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(-2, 5, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); wideShadow(sun); scene.add(sun);
+    },
+  },
+  {
+    name: 'Role Models-style 70s retro', note: 'Inspired by Role Models: mustard, teal and orange, soft flat shading and grainy film.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xe3b04b);
+      const t = (o) => toon(o, 2);
+      dress(w, (r) => ({ wall: t({ color: 0xe8b85a }), floor: t({ color: 0x2a7f7a }), ceiling: t({ color: 0xe8b85a }), wood: t({ color: 0xd9653b }), vase: t({ map: TEX.porcelain, color: 0xfff1d6 }), tag: t({ map: TEX.tag, side: THREE.DoubleSide }), blob: null, ring: t({ color: 0x5a2e1a }), twine: t({ color: 0xf2d29b }), trim: t({ color: 0xc98f2f }) }[r] || t({ color: 0xf2d29b })));
+      scene.add(new THREE.AmbientLight(0xfff0d0, 0.55));
+      const sun = new THREE.DirectionalLight(0xfff0d0, 0.75); sun.position.set(2.5, 5, 2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); wideShadow(sun); scene.add(sun);
+    },
+    post: ['grain', 'vignette'],
+  },
+  {
+    name: 'Drawful-style marker doodle', note: 'Inspired by Drawful: everything drawn in felt-tip marker on lined notebook paper.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0xffffff);
+      const lined = canvasTex(512, 512, (g, ww, hh) => { g.fillStyle = '#fdfdf8'; g.fillRect(0, 0, ww, hh); g.strokeStyle = '#9cc7e8'; g.lineWidth = 2; for (let y = 24; y < hh; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(ww, y); g.stroke(); } }, { repeat: 4 });
+      const paperM = new THREE.MeshBasicMaterial({ map: lined });
+      const white = new THREE.MeshBasicMaterial({ color: 0xfdfdf8 });
+      dress(w, (r) => ({ wall: paperM, floor: paperM, ceiling: paperM, vase: new THREE.MeshBasicMaterial({ map: TEX.porcelain }), tag: new THREE.MeshBasicMaterial({ color: 0xffd36b, side: THREE.DoubleSide }), blob: null, ring: white, twine: new THREE.MeshBasicMaterial({ color: 0x1b2a8a }) }[r] || white));
+      outline(w, 0x1b2a8a, 1.05);
+    },
+    post: ['wobble'],
+  },
+  {
+    name: 'Trivia Murder Party-style horror', note: 'Inspired by Trivia Murder Party: a dim, sickly green room, flicker of VHS noise and scanlines.',
+    build(scene, w) {
+      scene.background = new THREE.Color(0x0c140f);
+      scene.fog = new THREE.Fog(0x0c140f, 4, 11);
+      dress(w, (r, o) => {
+        if (r === 'blob') return null;
+        const m = o.material.clone();
+        if (m.color) m.color.multiplyScalar(0.8);
+        return m;
+      });
+      scene.add(new THREE.AmbientLight(0x3a6a4a, 0.35));
+      const bulb = new THREE.SpotLight(0xb8ffb0, 2.2, 10, 0.45, 0.7); bulb.position.set(0.2, 3.8, 0.8); bulb.target.position.set(0, 1, 0); bulb.castShadow = true; bulb.shadow.mapSize.set(2048, 2048);
+      scene.add(bulb, bulb.target);
+      const low = new THREE.PointLight(0x2f6b45, 0.6, 8); low.position.set(-2, 0.4, 1); scene.add(low);
+    },
+    tone: true,
+    post: ['vhs', 'vignette'],
+  },
+];
+
+document.querySelector('.styles h2').textContent = `${ART.length} art directions`;
+document.querySelector('.styles > p').textContent = 'Each one is the same scene re-rendered with its own materials, lighting and drawing technique, not a filter on the photo. The last five are inspired by the look of Jackbox games. Still rough, but each shows how that style would really look in the game.';
+const styleGrid = document.getElementById('styleGrid');
+styleGrid.innerHTML = ART.map((a, i) => `<figure><canvas id="st${i}" width="${SR_W}" height="${SR_H}"></canvas><figcaption><b>${a.name}</b><span>${a.note}</span></figcaption></figure>`).join('');
+
+function renderArt(i) {
+  const a = ART[i];
+  const scene = new THREE.Scene();
+  const w = cloneWorld();
+  scene.add(w);
+  a.build(scene, w);
+  const cam = camera();
+  const [rw, rh] = a.lowRes || [SR_W, SR_H];
+  styleRenderer.setSize(rw, rh, false);
+  styleRenderer.outputEncoding = THREE.sRGBEncoding;
+  styleRenderer.toneMapping = a.tone ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  styleRenderer.toneMappingExposure = 1.1;
+  styleRenderer.render(scene, cam);
+
+  const out = document.getElementById(`st${i}`).getContext('2d');
+  out.imageSmoothingEnabled = !a.lowRes;
+  out.clearRect(0, 0, SR_W, SR_H);
+  out.drawImage(styleRenderer.domElement, 0, 0, rw, rh, 0, 0, SR_W, SR_H);
+  out.imageSmoothingEnabled = true;
+  if (a.grey) {
+    const img = out.getImageData(0, 0, SR_W, SR_H);
+    for (let k = 0; k < img.data.length; k += 4) { const v = 0.3 * img.data[k] + 0.59 * img.data[k + 1] + 0.11 * img.data[k + 2]; img.data[k] = img.data[k + 1] = img.data[k + 2] = v; }
+    out.putImageData(img, 0, 0);
+  }
+  const posts = [].concat(a.post || []);
+  if (posts.includes('wobble')) {
+    // hand-drawn jitter: shift thin horizontal and vertical strips by a little wave
+    const copy = document.createElement('canvas'); copy.width = SR_W; copy.height = SR_H;
+    copy.getContext('2d').drawImage(out.canvas, 0, 0);
+    out.clearRect(0, 0, SR_W, SR_H);
+    for (let y = 0; y < SR_H; y += 3) out.drawImage(copy, 0, y, SR_W, 3, Math.sin(y / 23) * 1.6 + Math.sin(y / 7) * 0.6, y, SR_W, 3);
+    copy.getContext('2d').clearRect(0, 0, SR_W, SR_H);
+    copy.getContext('2d').drawImage(out.canvas, 0, 0);
+    out.clearRect(0, 0, SR_W, SR_H);
+    for (let x = 0; x < SR_W; x += 3) out.drawImage(copy, x, 0, 3, SR_H, x, Math.sin(x / 29) * 1.4 + Math.sin(x / 9) * 0.5, 3, SR_H);
+  }
+  if (posts.includes('crayon')) {
+    out.globalCompositeOperation = 'multiply'; out.globalAlpha = 0.35;
+    out.drawImage(noiseTex(90, 512).image, 0, 0, SR_W, SR_H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  }
+  if (posts.includes('grain')) {
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.3;
+    out.drawImage(noiseTex(110, 512).image, 0, 0, SR_W, SR_H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  }
+  if (posts.includes('vhs')) {
+    out.fillStyle = 'rgba(0,0,0,.18)';
+    for (let y = 0; y < SR_H; y += 3) out.fillRect(0, y, SR_W, 1);
+    out.globalCompositeOperation = 'screen'; out.globalAlpha = 0.18;
+    out.drawImage(noiseTex(160, 512).image, 0, 0, SR_W, SR_H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+    // a torn tracking band
+    const band = 330 + Math.random() * 120;
+    out.drawImage(out.canvas, 0, band, SR_W, 14, 9, band, SR_W, 14);
+  }
+  if (posts.includes('vignette')) {
+    const v = out.createRadialGradient(SR_W / 2, SR_H * 0.45, SR_H * 0.25, SR_W / 2, SR_H * 0.45, SR_W * 0.6);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+    out.fillStyle = v; out.fillRect(0, 0, SR_W, SR_H);
+  }
+  if (a.post === 'bloom') {
+    out.globalCompositeOperation = 'lighter';
+    out.filter = 'blur(6px)'; out.drawImage(out.canvas, 0, 0);
+    out.filter = 'blur(2px)'; out.drawImage(out.canvas, 0, 0);
+    out.filter = 'none';
+    out.globalCompositeOperation = 'source-over';
+  }
+  if (a.post === 'paper') {
+    out.globalCompositeOperation = 'multiply';
+    out.globalAlpha = 0.25;
+    out.drawImage(noiseTex(70, 512).image, 0, 0, SR_W, SR_H);
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+  }
+}
+
+ART.forEach((_, i) => setTimeout(() => renderArt(i), 500 + i * 120));
+
+</script>

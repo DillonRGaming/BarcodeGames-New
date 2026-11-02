@@ -105,7 +105,8 @@ class SoundController {
   _attachUnlockListeners() {
     const unlock = () => {
       this.unlockAudio();
-      this.startAtmosphere();
+      // Only until the game stops the lobby sound; otherwise any click/key brought the lobby music back
+      if (!this.atmosphereStopped) this.startAtmosphere();
     };
 
     ['click', 'keydown', 'touchstart', 'pointerdown'].forEach((evt) => {
@@ -480,6 +481,7 @@ class SoundController {
   }
 
   stopAtmosphere(keepLamp = true) {
+    this.atmosphereStopped = true;
     this.musicMuted = true;
     this.musicStarted = false;
     if (this.musicAudio) {

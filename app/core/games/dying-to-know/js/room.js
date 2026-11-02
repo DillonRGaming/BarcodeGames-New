@@ -201,6 +201,8 @@ class RoomManager {
     if (this.blackout) {
       this.blackout.style.opacity = `${opacity}`;
     }
+    // The lobby's webs and gradient sit above the blackout layer, so they go dark with it
+    document.body.classList.toggle('blacked-out', opacity > 0);
   }
 
   /* =========================================

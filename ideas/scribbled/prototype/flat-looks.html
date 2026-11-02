@@ -1,0 +1,177 @@
+<title>Scribbled Flat Looks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600&family=Karla:wght@400;600&display=swap">
+<style>
+/* Layout: eight flat 2D renditions of the same exhibit, two per row, each a 16:9 TV frame holding one inline SVG. Single light look on purpose. */
+:root {
+  --paper: #f4f2ec;
+  --ink: #1d1b18;
+  --muted: #77726a;
+  --line: #dcd8cf;
+  --display: "Fraunces", Georgia, serif;
+  --body: "Karla", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 60px; display: grid; gap: 26px; }
+header { display: grid; gap: 8px; }
+header h1 { margin: 0; font-family: var(--display); font-weight: 300; font-size: clamp(30px, 4.6vw, 52px); text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 62ch; line-height: 1.55; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 22px; }
+@media (max-width: 800px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+figure { margin: 0; display: grid; gap: 9px; min-width: 0; }
+figure svg { width: 100%; height: auto; display: block; border-radius: 5px; box-shadow: 0 0 0 1px var(--line), 0 12px 26px rgba(0,0,0,.07); }
+figcaption { display: grid; gap: 2px; }
+figcaption b { font-family: var(--display); font-weight: 600; font-size: 19px; }
+figcaption span { color: var(--muted); font-size: 14px; line-height: 1.45; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Scribbled, flat</h1>
+    <p>The same exhibit drawn as a flat 2D illustration: front-on, no perspective, vector shapes that stay crisp on any TV. Eight directions, from clean to hand-drawn.</p>
+  </header>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+/*
+  One drawing, many treatments. Coordinates are in a 1600 x 900 frame:
+  wall above y=640, floor below; benches left and right; a stool in the middle running off the
+  bottom edge; the vase standing on the stool with a price tag tied round its neck.
+*/
+const VASE = 'M742 600 C735 585 728 570 722 548 C706 500 690 455 694 410 C698 365 730 330 762 308 C774 300 780 290 779 276 C778 262 772 252 768 246 L832 246 C828 252 822 262 821 276 C820 290 826 300 838 308 C870 330 902 365 906 410 C910 455 894 500 878 548 C872 570 865 585 858 600 Z';
+
+function scene(o, id) {
+  const P = o.palette;
+  const sw = o.line ? o.line.width : 0;
+  const stroke = o.line ? `stroke="${o.line.color}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"` : '';
+  const shadowOffset = o.shadow === 'hard' ? 14 : 0;
+
+  const defs = `
+    <clipPath id="vclip-${id}"><path d="${VASE}"/></clipPath>
+    <filter id="wob-${id}" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="${o.wobble || 0}"/></filter>
+    <filter id="grain-${id}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 ${o.grain || 0} 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+    <filter id="drop-${id}" x="-20%" y="-20%" width="140%" height="140%"><feOffset dx="${shadowOffset}" dy="${shadowOffset}" in="SourceAlpha"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.22 0"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="dots-${id}" width="34" height="34" patternUnits="userSpaceOnUse"><rect width="34" height="34" fill="${P.wall}"/><circle cx="9" cy="9" r="6" fill="${P.wallDot || P.wall}"/><circle cx="26" cy="26" r="6" fill="${P.wallDot || P.wall}"/></pattern>
+    <pattern id="planks-${id}" width="200" height="40" patternUnits="userSpaceOnUse"><rect width="200" height="40" fill="${P.floor}"/><rect y="0" width="200" height="3" fill="${P.floorLine}"/><rect x="${o.planks === 'tiles' ? 98 : 140}" y="0" width="3" height="40" fill="${P.floorLine}"/></pattern>
+    <radialGradient id="spot-${id}" cx="50%" cy="0%" r="80%"><stop offset="0" stop-color="${P.spot || '#fff'}" stop-opacity="${P.spot ? 0.5 : 0}"/><stop offset="1" stop-color="${P.spot || '#fff'}" stop-opacity="0"/></radialGradient>`;
+
+  const wallFill = o.dots ? `url(#dots-${id})` : P.wall;
+  const floorFill = o.planks ? `url(#planks-${id})` : P.floor;
+
+  const bench = (x) => `
+    <g ${stroke}>
+      <rect x="${x}" y="560" width="400" height="24" rx="3" fill="${P.bench}"/>
+      <rect x="${x + 30}" y="584" width="20" height="58" fill="${P.benchDark}"/>
+      <rect x="${x + 350}" y="584" width="20" height="58" fill="${P.benchDark}"/>
+    </g>`;
+
+  const stool = `
+    <g ${stroke} filter="url(#drop-${id})">
+      <rect x="675" y="612" width="34" height="320" fill="${P.woodDark}"/>
+      <rect x="891" y="612" width="34" height="320" fill="${P.woodDark}"/>
+      <rect x="709" y="760" width="182" height="18" fill="${P.woodDark}"/>
+      <rect x="650" y="596" width="300" height="24" rx="3" fill="${P.wood}"/>
+    </g>`;
+
+  const pattern = o.vasePattern === false ? '' : `
+    <g clip-path="url(#vclip-${id})">
+      <rect x="690" y="246" width="230" height="22" fill="${P.ink}"/>
+      <rect x="690" y="292" width="230" height="8" fill="${P.ink}"/>
+      ${[0, 1, 2, 3, 4, 5].map((i) => `<path d="M${712 + i * 36} 576 q18 -34 36 0" fill="${P.ink}"/>`).join('')}
+      <rect x="690" y="566" width="230" height="8" fill="${P.ink}"/>
+      <path d="M690 480 C740 470 770 440 800 420 S860 380 910 372" fill="none" stroke="${P.ink}" stroke-width="12" stroke-linecap="round"/>
+      <path d="M778 432 C790 400 805 380 826 360" fill="none" stroke="${P.ink}" stroke-width="7" stroke-linecap="round"/>
+      ${[[826, 358], [846, 380], [752, 452], [880, 378], [800, 418]].map(([x, y]) => `<g fill="${P.vase}" stroke="${P.ink}" stroke-width="4">${[0, 72, 144, 216, 288].map((a) => `<circle cx="${x + Math.cos(a * Math.PI / 180) * 9}" cy="${y + Math.sin(a * Math.PI / 180) * 9}" r="7"/>`).join('')}</g><circle cx="${x}" cy="${y}" r="5" fill="${P.ink}"/>`).join('')}
+      <path d="M736 500 c18 -22 52 -24 66 -6 c-10 6 -14 18 -10 30 c-20 4 -44 0 -56 -24 z" fill="${P.ink}"/>
+      <circle cx="744" cy="494" r="4" fill="${P.vase}"/>
+    </g>`;
+
+  const vaseShape = `
+    <g filter="url(#drop-${id})">
+      <path d="${VASE}" fill="${P.vase}" ${stroke}/>
+      ${pattern}
+      ${o.line ? `<path d="${VASE}" fill="none" ${stroke}/>` : ''}
+      ${o.highlight ? `<path d="M722 420 C722 380 740 352 760 336" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".55"/>` : ''}
+    </g>`;
+
+  const tag = `
+    <g ${stroke}>
+      <path d="M820 300 C850 312 868 330 880 352" fill="none" stroke="${P.twine}" stroke-width="5"/>
+      <ellipse cx="800" cy="300" rx="26" ry="6" fill="none" stroke="${P.twine}" stroke-width="5"/>
+      <g transform="rotate(18 880 352)" filter="url(#drop-${id})">
+        <path d="M880 334 L912 318 H1032 V386 H912 L880 370 Z" fill="${P.tag}" ${stroke}/>
+        <circle cx="900" cy="352" r="7" fill="${P.wall}" stroke="${P.tagInk}" stroke-width="3"/>
+        <text x="926" y="366" font-family="Georgia, serif" font-size="34" font-weight="700" fill="${P.tagInk}">£</text>
+        <text x="950" y="366" font-family="Georgia, serif" font-size="30" font-weight="700" fill="${P.tagInk}">4,800</text>
+        <path d="M948 342 c10 -8 16 26 26 4 s16 22 26 2 s14 18 24 -2 M950 362 c12 -8 18 20 30 2 s18 16 30 -2" fill="none" stroke="${P.scribble}" stroke-width="9" stroke-linecap="round"/>
+      </g>
+    </g>`;
+
+  const shadowUnder = o.shadow === 'soft' ? `<ellipse cx="800" cy="900" rx="230" ry="26" fill="rgba(0,0,0,.08)"/>` : '';
+
+  return `<svg viewBox="0 0 1600 900" role="img" aria-label="${o.name}">
+    <defs>${defs}</defs>
+    <g filter="${o.wobble ? `url(#wob-${id})` : ''}">
+      <rect width="1600" height="640" fill="${wallFill}"/>
+      ${P.spot ? `<path d="M650 0 H950 L1180 640 H420 Z" fill="url(#spot-${id})"/>` : ''}
+      ${P.frame ? `<rect x="190" y="150" width="260" height="190" fill="${P.frame}" ${stroke}/><rect x="1150" y="120" width="230" height="250" fill="${P.frame}" ${stroke}/>` : ''}
+      <rect y="640" width="1600" height="260" fill="${floorFill}"/>
+      <rect y="628" width="1600" height="12" fill="${P.skirting}"/>
+      ${bench(140)}${bench(1060)}
+      ${shadowUnder}
+      ${stool}
+      ${vaseShape}
+      ${tag}
+    </g>
+    ${o.grain ? `<rect width="1600" height="900" filter="url(#grain-${id})" fill="#000" opacity="1"/>` : ''}
+  </svg>`;
+}
+
+const LOOKS = [
+  {
+    name: 'Flat vector', note: 'Clean shapes, no outlines, quiet gallery colours. Reads instantly on a TV.',
+    palette: { wall: '#f3f0e8', floor: '#d9b88c', floorLine: '#c9a476', skirting: '#e4dfd3', bench: '#a8724a', benchDark: '#8a5b39', wood: '#b9824f', woodDark: '#9a6a40', vase: '#f7f8fb', ink: '#2c4aa8', tag: '#d2a877', tagInk: '#3a2818', scribble: '#151515', twine: '#c8a676' },
+    planks: 'planks', shadow: 'soft', highlight: true,
+  },
+  {
+    name: 'Sticker outlines', note: 'Thick dark outlines round everything and bright fills, like a party game.',
+    palette: { wall: '#fff3c4', floor: '#ff9f5a', floorLine: '#e9853f', skirting: '#ffd36b', bench: '#e2513a', benchDark: '#b83a27', wood: '#e2513a', woodDark: '#b83a27', vase: '#ffffff', ink: '#2747c9', tag: '#f2c27a', tagInk: '#1d1b18', scribble: '#111', twine: '#1d1b18' },
+    line: { color: '#1d1b18', width: 8 }, planks: 'planks',
+  },
+  {
+    name: 'Hand-drawn', note: 'Wobbly outlines and crayon grain, as if drawn on someone\'s phone.',
+    palette: { wall: '#fde9a8', floor: '#f6a65c', floorLine: '#e48a3e', skirting: '#f3cf6c', bench: '#c0392b', benchDark: '#962b20', wood: '#c0392b', woodDark: '#962b20', vase: '#ffffff', ink: '#1f3fb8', tag: '#f0c27c', tagInk: '#1b1a18', scribble: '#111', twine: '#1b1a18' },
+    line: { color: '#191919', width: 7 }, wobble: 9, grain: 0.22,
+  },
+  {
+    name: 'Paper cut-out', note: 'No outlines, every shape cut from card with a hard little drop shadow.',
+    palette: { wall: '#ece3d1', floor: '#c99a62', floorLine: '#b88850', skirting: '#ddd2bd', bench: '#8a5534', benchDark: '#6e4128', wood: '#8a5534', woodDark: '#6e4128', vase: '#f6f2ea', ink: '#2f4fa8', tag: '#c69c6d', tagInk: '#2a1d14', scribble: '#151515', twine: '#a0784e' },
+    shadow: 'hard', grain: 0.12,
+  },
+  {
+    name: 'Mid-century', note: 'Mustard, teal and burnt orange with thin lines and a little film grain.',
+    palette: { wall: '#e8b85a', floor: '#2a7f7a', floorLine: '#236c68', skirting: '#c98f2f', bench: '#d9653b', benchDark: '#b04e2b', wood: '#d9653b', woodDark: '#b04e2b', vase: '#fff1d6', ink: '#1f4f6f', tag: '#f2d29b', tagInk: '#3a2414', scribble: '#1a1a1a', twine: '#5a2e1a', frame: '#f2d29b' },
+    line: { color: '#3a2414', width: 3 }, grain: 0.16,
+  },
+  {
+    name: 'Pop art', note: 'Halftone-dot wall, flat primaries and chunky black outlines.',
+    palette: { wall: '#ffd23f', wallDot: '#f5a623', floor: '#1fb5ad', floorLine: '#178f88', skirting: '#111', bench: '#ff4d6d', benchDark: '#d23050', wood: '#ff4d6d', woodDark: '#d23050', vase: '#ffffff', ink: '#2747c9', tag: '#ffe9a8', tagInk: '#111', scribble: '#111', twine: '#111' },
+    line: { color: '#111', width: 7 }, dots: true, planks: 'tiles',
+  },
+  {
+    name: 'Line and one colour', note: 'Black linework on cream, with blue only on the vase.',
+    palette: { wall: '#f7f1e3', floor: '#f7f1e3', floorLine: '#2a241e', skirting: '#2a241e', bench: '#f7f1e3', benchDark: '#f7f1e3', wood: '#f7f1e3', woodDark: '#f7f1e3', vase: '#f7f1e3', ink: '#2c4aa8', tag: '#f7f1e3', tagInk: '#2a241e', scribble: '#2a241e', twine: '#2a241e' },
+    line: { color: '#2a241e', width: 4 }, planks: 'planks',
+  },
+  {
+    name: 'Night gallery', note: 'Deep navy room and one flat beam of light on the vase.',
+    palette: { wall: '#1b2440', spot: '#fff3c8', floor: '#141b30', floorLine: '#0f1526', skirting: '#11182c', bench: '#2c3656', benchDark: '#222b47', wood: '#5a4636', woodDark: '#45352a', vase: '#f4f2ec', ink: '#3354c6', tag: '#d9b27c', tagInk: '#1b1a18', scribble: '#111', twine: '#d9b27c', frame: '#26304f' },
+    planks: 'planks', highlight: true,
+  },
+];
+
+document.getElementById('grid').innerHTML = LOOKS.map((o, i) => `<figure>${scene(o, i)}<figcaption><b>${o.name}</b><span>${o.note}</span></figcaption></figure>`).join('');
+</script>

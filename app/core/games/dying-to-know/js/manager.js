@@ -4,7 +4,7 @@
 
 const MAX_PLAYERS = 8;
 const DEV_RANDOM_MONEY = true; // testing: everyone starts with £0–£2000 instead of £100
-const DEV_BOTS = 3; // simulated players for testing; 0 to turn off
+const DEV_BOTS = 4; // simulated players for testing; 0 to turn off
 
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {
@@ -21,6 +21,7 @@ class GameManager {
     // Lobby UI Elements
     this.lobbyUI = document.getElementById('lobbyUI');
     this.slotCardsEl = document.getElementById('slotCards');
+    this._shuffleLobbySpots();
     if (this.slotCardsEl) [0, 3, 6].forEach((i) => this.slotCardsEl.children[i]?.classList.add('folded'));
     this.roomCodeEl = document.getElementById('lobbyRoomCode');
     this.startPromptEl = document.getElementById('lobbyStartPrompt');
@@ -47,46 +48,11 @@ class GameManager {
     this.isQuestionActive = false;
     this.roomRoundCount = 0;
 
-    // Question Bank (with official Trivia voicelines)
-    this.questionBank = [
-      {
-        question: "Which animal is the loudest?",
-        voiceline: "assets/sound/voicelines/55607_Which_animal_is_the_loudest.ogg",
-        answers: [
-          { num: 1, text: "sperm whale" },
-          { num: 2, text: "howler monkey" },
-          { num: 3, text: "blue whale" },
-          { num: 4, text: "pistol shrimp" }
-        ],
-        correctIndex: 1,
-        time: 15
-      },
-      {
-        question: "Who built the Pyramid of the Sun?",
-        voiceline: "assets/sound/voicelines/55620_Who_built_the_Pyramid_of_the_Sun.ogg",
-        answers: [
-          { num: 1, text: "Aztecs" },
-          { num: 2, text: "Teotihuacanos" },
-          { num: 3, text: "Mayans" },
-          { num: 4, text: "Incas" }
-        ],
-        correctIndex: 2,
-        time: 15
-      },
-      {
-        question: "What is a sugar glider?",
-        voiceline: "assets/sound/voicelines/56011_What_is_a_sugar_glider.ogg",
-        answers: [
-          { num: 1, text: "bird" },
-          { num: 2, text: "rodent" },
-          { num: 3, text: "marsupial" },
-          { num: 4, text: "flying squirrel" }
-        ],
-        correctIndex: 3,
-        time: 15
-      }
-    ];
+    this.questionBank = QUESTIONS;
     this.currentQuestionIdx = 0;
+    this.roundToken = 0;
+    this.skipRoundBtn = document.getElementById('skipRoundBtn');
+    if (this.skipRoundBtn) this.skipRoundBtn.addEventListener('click', () => this.skipRound());
 
     this._initInput();
     this._initLobbyUI();
@@ -117,10 +83,16 @@ class GameManager {
         const index = Number(data.index);
         if (index >= 0 && index < 4) {
           this.answers.set(roomId, index + 1); // 1-based like correctIndex
+          this.answerTimes.set(roomId, performance.now());
+          this.checkAllAnswered();
           const player = this.playersById.get(roomId);
           if (player) player.blendWiggle(0, 0.35); // locked in: face straight ahead
         }
         return;
+      }
+      if (this.killingRoom) {
+        const player = this.playersById.get(roomId);
+        if (player) this.killingRoom.onMessage(player, data);
       }
       if (data.type === 'skip') {
         const player = this.playersById.get(roomId);
@@ -198,6 +170,23 @@ class GameManager {
       if (this.sound) this.sound.playWhoosh();
     }, 3600);
     return player;
+  }
+
+  /**
+   * Deal the 8 lobby spots out in a random order each game: card N and the Nth player to join
+   * share a spot, so the numbers land anywhere. These rules override the fixed ones in style.css.
+   */
+  _shuffleLobbySpots() {
+    const spots = [[13.5, 19], [20, 46], [6.5, 60], [41.5, 62], [56, 27], [70.5, 37], [77.5, 14], [82.5, 62]];
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    const style = document.createElement('style');
+    style.textContent = spots.map(([x, y], i) =>
+      `.grid.lobby .letter-slot:nth-child(${i + 1}), .slot-card:nth-child(${i + 1}) { left: ${x}vw; top: ${y}vh; }`
+    ).join('\n');
+    document.head.appendChild(style);
   }
 
   /** Hide the numbered card under every lobby spot that has a player */
@@ -304,7 +293,7 @@ class GameManager {
   setRoomCode(code) {
     this.roomCode = code;
     if (this.roomCodeEl) {
-      this.roomCodeEl.textContent = code;
+      scrambleText(this.roomCodeEl, code, 300); // XXXX, then decodes like a player's name
     }
     if (this.gameRoomCodeEl) {
       this.gameRoomCodeEl.textContent = code;
@@ -349,9 +338,31 @@ class GameManager {
 
     const show = () => {
       if (n === 0) {
+        // Past the point of cancelling: 1s, everyone turns to face straight ahead, then the lights go
         this.countdownTimer = null;
-        this.endStartCountdown();
-        this.startIntroSequence();
+        this.gameState = 'STARTING';
+        this.cancelPromptEl?.classList.add('hidden');
+        this.setPhoneState({ type: 'wait' });
+        // Same as a room change: everyone freezes straight, the build plays, then the cut to black
+        setTimeout(() => {
+          this.players.forEach((p) => p.blendWiggle(0, 1.0));
+          setTimeout(() => { if (this.sound) this.sound.playBuild(); }, 300);
+          setTimeout(() => {
+            // Cut to black with only their eyes showing (like a room change), then the intro fades in 2s later
+            if (this.room) this.room.setBlackout(1);
+            this.players.forEach((p) => p.setEyesMode(true));
+            if (this.grid) this.grid.classList.add('eyes-only');
+            if (this.sound) {
+              this.sound.playSlam(1.0);
+              this.sound.stopAtmosphere(true);
+            }
+            this.endStartCountdown();
+            this.startPromptEl?.classList.add('hidden');
+            if (this.lobbyUI) this.lobbyUI.classList.add('hidden');
+            if (this.slotCardsEl) this.slotCardsEl.classList.add('hidden');
+            setTimeout(() => this.startIntroSequence(), 2000);
+          }, 2400);
+        }, 1000);
         return;
       }
       if (this.countdownEl) {
@@ -388,6 +399,7 @@ class GameManager {
     this.isIntroSkipped = true;
     this.isIntroRunning = false;
     this.gameState = 'PLAYING';
+    if (this.skipRoundBtn) this.skipRoundBtn.classList.remove('hidden');
     this.setPhoneState({ type: 'wait' });
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
@@ -427,8 +439,11 @@ class GameManager {
     if (this.grid) {
       this.grid.classList.remove('hide-names');
     }
+    if (this.room) this.room.setBlackout(0);
+    if (this.grid) this.grid.classList.remove('eyes-only');
     this.players.forEach((p) => {
       p.resetPose();
+      p.setEyesMode(false);
       p.blendWiggle(1.0, 0.2);
     });
 
@@ -540,10 +555,7 @@ class GameManager {
     const atmosphere = document.getElementById('lobbyAtmosphere');
     if (atmosphere) atmosphere.classList.add('hidden');
 
-    // 3. Screen fades to pitch black and light switches off
-    if (this.sound) {
-      this.sound.playLight();
-    }
+    // 3. Screen fades to pitch black
 
     const introOverlay = document.getElementById('introOverlay');
     const introLogo = document.getElementById('introLogo');
@@ -609,7 +621,13 @@ class GameManager {
     if (this.camera) {
       this.camera.setGridMode('grid');
     }
-    this.players.forEach((p) => p.resetPose());
+    if (this.room) this.room.setBlackout(0);
+    if (this.grid) this.grid.classList.remove('eyes-only');
+    this.players.forEach((p) => {
+      p.resetPose();
+      p.setEyesMode(false);
+      p.blendWiggle(1.0, 0.2); // they went straight before the lights went out
+    });
 
     // 13. Fade in the curtains behind the logo over 1.8s
     const curtains = document.getElementById('curtainsContainer');
@@ -662,6 +680,7 @@ class GameManager {
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
     this.gameState = 'PLAYING';
+    if (this.skipRoundBtn) this.skipRoundBtn.classList.remove('hidden');
     this.setPhoneState({ type: 'wait' });
 
     // 16. Show players in the grid, then the starting scoreboard
@@ -739,8 +758,8 @@ class GameManager {
     }
 
     // 2. Play question voiceline
-    if (data.voiceline && this.sound) {
-      await this.sound.playVoiceline(data.voiceline);
+    if (data.voice && this.sound) {
+      await this.sound.playVoiceline(data.voice);
     } else {
       await new Promise((r) => setTimeout(r, 1200));
     }
@@ -755,6 +774,7 @@ class GameManager {
     // Phones get the answers up front (hidden) and reveal each one at the same moment as the TV.
     const answerTexts = data.answers.map((a) => a.text);
     this.answers = new Map();
+    this.answerTimes = new Map();
     this.setPhoneState({ type: 'question', answers: answerTexts, shown: 0, open: false });
     for (let i = 0; i < items.length; i++) {
       if (!this.isQuestionActive) return;
@@ -779,9 +799,12 @@ class GameManager {
     const seconds = data.time || 15;
     this.players.filter((p) => !p.roomId).forEach((p) => {
       p.botChoice = null;
+      p.botAnsweredAt = null;
       setTimeout(() => {
         if (!this.acceptingAnswers) return;
         p.botChoice = Math.floor(Math.random() * 4) + 1;
+        p.botAnsweredAt = performance.now();
+        this.checkAllAnswered();
         p.blendWiggle(0, 0.35);
       }, 1000 + Math.random() * (seconds - 2) * 1000);
     });
@@ -851,6 +874,44 @@ class GameManager {
     }, 1000);
   }
 
+  /**
+   * Skip Round: abandon this round wherever it is (question, results or killing room) and go to the
+   * next question through a normal room change, which resets everything in the dark.
+   */
+  skipRound() {
+    if (this.gameState !== 'PLAYING' || this.isTransitioning) return;
+    this.roundToken++;
+    this.acceptingAnswers = false;
+    this.stopQuestionTimer();
+    if (this.isQuestionActive) this.hideQuestion();
+    const director = this.killingRoom;
+    if (director) director.abort();
+    this.killingRoom = null;
+    this.setPhoneState({ type: 'wait' });
+    this.runRoomTransitionLoop(() => {
+      if (director) {
+        director.leave();
+      } else {
+        this.camera.setGridMode('grid');
+        this.players.forEach((p) => {
+          p.cancelFlight();
+          p.clearResult(1.0);
+        });
+      }
+    });
+  }
+
+  /** Everyone has locked in: the clock goes to 0 now and the round carries on as if it ran out */
+  checkAllAnswered() {
+    if (!this.acceptingAnswers || !this.questionTimer) return;
+    const done = this.getActivePlayers().every((p) => (p.roomId ? this.answers.has(p.roomId) : p.botChoice != null));
+    if (!done) return;
+    this.questionSeconds = 0;
+    this.flipClock.set(0);
+    this.stopQuestionTimer();
+    this.handleQuestionTimeout();
+  }
+
   stopQuestionTimer() {
     if (this.questionTimer) {
       clearInterval(this.questionTimer);
@@ -858,8 +919,36 @@ class GameManager {
     }
   }
 
+  /** The living player who answered last; anyone who didn't answer counts as later (random among them) */
+  lastToAnswer() {
+    const alive = this.getActivePlayers().filter((p) => p.isAlive());
+    if (!alive.length) return null;
+    const timeOf = (p) => (p.roomId ? this.answerTimes && this.answerTimes.get(p.roomId) : p.botAnsweredAt);
+    const silent = alive.filter((p) => timeOf(p) == null);
+    if (silent.length) return silent[Math.floor(Math.random() * silent.length)];
+    return alive.reduce((a, b) => (timeOf(b) > timeOf(a) ? b : a));
+  }
+
+  /** Killing room for `taken` plus any volunteers (deaths happen inside the room) */
+  async runKillingRoom(taken) {
+    if (this.killingRoom) return;
+    const director = new KillingRoomDirector(this);
+    this.killingRoom = director;
+    try {
+      await director.run(taken);
+    } catch (e) {
+      if (e === KILL_ABORTED) return; // skipped: skipRound handles the way out
+      throw e;
+    }
+    this.killingRoom = null;
+    this.setPhoneState({ type: 'wait' });
+    this.runRoomTransitionLoop(() => director.leave()); // out of the killing room like any room change
+  }
+
   async handleQuestionTimeout() {
     this.stopQuestionTimer();
+    const round = this.roundToken; // a skip changes this; everything below stops when it does
+    const skipped = () => round !== this.roundToken;
     const currentQ = this.questionBank[this.currentQuestionIdx % this.questionBank.length];
     const correctIdx = currentQ.correctIndex || 1; // 1-indexed
 
@@ -897,24 +986,36 @@ class GameManager {
 
     // 3. Wait 3.5 seconds for players to see and react to the results
     await new Promise((r) => setTimeout(r, 3500));
+    if (skipped()) return;
 
     // 4. Hide question board, answers, and clock
     this.hideQuestion();
 
     // 5. Wait 2.0 seconds with players still in lineup celebrating/mourning
     await new Promise((r) => setTimeout(r, 2000));
+    if (skipped()) return;
+
+    // 5b. The last living player to answer is taken to the killing room (volunteers may join)
+    const taken = this.lastToAnswer();
+    if (taken) {
+      await this.runKillingRoom(taken); // ends with the room change into the next question
+      return;
+    }
 
     // 6. Return players to the center 2x4 grid
     this.players.forEach((p) => p.fadeResultBadge());
     await new Promise((r) => setTimeout(r, 450));
+    if (skipped()) return;
     this.players.forEach((p) => {
       p.clearResult(1.0);
       if (p.isAlive()) p.blendWiggle(1.0, 0.45);
     });
     await this.toggleLineup();
+    if (skipped()) return;
 
     // 7. Wait 2.5 seconds in the center before triggering room blackout transition
     await new Promise((r) => setTimeout(r, 2500));
+    if (skipped()) return;
 
     // 8. Trigger full room blackout & eyes transition loop
     this.runRoomTransitionLoop();
@@ -924,9 +1025,11 @@ class GameManager {
      Room Blackout Transition Loop
      ========================================= */
 
-  runRoomTransitionLoop() {
+  runRoomTransitionLoop(onDark = null) {
     if (this.isTransitioning) return;
     this.isTransitioning = true;
+    const round = ++this.roundToken; // a skip after the lights come up stops this run and starts its own
+    const skipped = () => round !== this.roundToken;
 
     // 1. Stop background scrolling
     if (this.room) {
@@ -957,6 +1060,7 @@ class GameManager {
         this.room.setBlackout(1);
         this.room.switchBackground();
       }
+      if (onDark) onDark();
 
       this.players.forEach((p) => {
         if (p.isAlive()) p.setEyesMode(true);
@@ -994,21 +1098,25 @@ class GameManager {
 
           // Wait 2.0s in the center 2x4 grid in the new room
           await new Promise((r) => setTimeout(r, 2000));
+          if (skipped()) return;
 
           // Every 3 rounds, the scoreboard before the next question
           if (this.currentQuestionIdx % 3 === 0) await this.showScoreboard();
+          if (skipped()) return;
 
           // Move to top lineup
           this.flyTo('lineup');
 
           // 1.5s later, start room moving
           await new Promise((r) => setTimeout(r, 1500));
+          if (skipped()) return;
           if (this.room) {
             this.room.bgScrolling = true;
           }
 
           // Fade in questions one by one with 15s countdown
           await new Promise((r) => setTimeout(r, 1000));
+          if (skipped()) return;
           this.showQuestion(nextQ);
         }, 1200);
       }, 3200);
@@ -1141,6 +1249,38 @@ class GameManager {
      Lineup Trajectory Flight (L Key)
      ========================================= */
 
+  /**
+   * Killing-room layout: each listed player flies to its own spot (px centre) and size;
+   * everyone else stays exactly where they are.
+   */
+  placeForKilling(targets, dur = 850, slide = new Set(), stagger = 0) {
+    const before = new Map(this.players.map((p) => {
+      const r = p.slot.getBoundingClientRect();
+      return [p, { cx: r.left + r.width / 2, cy: r.top + r.height / 2, k: p.currentScale || 1.0 }];
+    }));
+    this.camera.setGridMode('killing');
+    const now = performance.now();
+    let order = 0;
+    this.players.forEach((p) => {
+      const from = before.get(p);
+      const t = targets.get(p) || { x: from.cx, y: from.cy, k: from.k };
+      p.slot.style.setProperty('--kx', `${t.x.toFixed(1)}px`);
+      p.slot.style.setProperty('--ky', `${t.y.toFixed(1)}px`);
+      if (!targets.has(p)) return;
+      const r = p.slot.getBoundingClientRect();
+      const sx = r.left + r.width / 2;
+      const sy = r.top + r.height / 2;
+      if (dur <= 0) {
+        p.cancelFlight();
+        p.currentScale = t.k;
+        p.wrapper.style.transform = `scale(${t.k.toFixed(4)})`;
+        return;
+      }
+      p.startFlight({ from, to: { cx: sx, cy: sy, k: t.k, slotCenterX: sx, slotCenterY: sy }, delay: order++ * stagger, dur, now, arc: !slide.has(p) });
+    });
+    return new Promise((r) => setTimeout(r, Math.max(0, order - 1) * stagger + dur)); // until the last one lands
+  }
+
   async toggleLineup() {
     return this.flyTo(this.camera.isLineup ? 'grid' : 'lineup');
   }
@@ -1239,6 +1379,12 @@ class GameManager {
         if (this.gameState === 'INTRO') {
           this.skipIntro();
         }
+      } else if (key === 'n') {
+        this.skipRound();
+      } else if (key === 'k') {
+        // Dev: take a random living player to the killing room
+        const alive = this.players.filter((p) => p.isAlive());
+        if (alive.length) this.runKillingRoom(alive[Math.floor(Math.random() * alive.length)]);
       } else if (key === 'q' || key === 't') {
         this.toggleQuestion();
       } else if (e.code === 'Space') {

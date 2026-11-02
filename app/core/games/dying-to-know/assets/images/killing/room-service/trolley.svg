@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260">
+  <!-- push handle -->
+  <path d="M60 40 L22 6" stroke="#000" stroke-width="14" stroke-linecap="round"/>
+  <path d="M60 40 L22 6" stroke="#c9a24a" stroke-width="7" stroke-linecap="round"/>
+  <rect x="6" y="0" width="34" height="14" rx="7" fill="#3a1a12" stroke="#000" stroke-width="4"/>
+  <!-- legs -->
+  <rect x="96" y="40" width="16" height="170" fill="#8a6d2c" stroke="#000" stroke-width="4"/>
+  <rect x="688" y="40" width="16" height="170" fill="#8a6d2c" stroke="#000" stroke-width="4"/>
+  <!-- lower shelf with a stack of napkins and a bottle -->
+  <rect x="80" y="160" width="640" height="16" fill="#5a2c1c" stroke="#000" stroke-width="4"/>
+  <rect x="150" y="140" width="80" height="20" fill="#ece6d8" stroke="#000" stroke-width="4"/>
+  <rect x="150" y="128" width="80" height="12" fill="#d6cfbf" stroke="#000" stroke-width="4"/>
+  <rect x="560" y="104" width="22" height="56" rx="4" fill="#2f4f2a" stroke="#000" stroke-width="4"/>
+  <rect x="565" y="88" width="12" height="18" fill="#2f4f2a" stroke="#000" stroke-width="4"/>
+  <rect x="562" y="122" width="18" height="16" fill="#ece6d8"/>
+  <!-- top tray: tablecloth with a scalloped hem -->
+  <rect x="60" y="30" width="680" height="14" fill="#c9a24a" stroke="#000" stroke-width="4"/>
+  <path d="M64 44 H736 V86 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 q-21 18 -42 0 Z" fill="#7a0f14" stroke="#000" stroke-width="4"/>
+  <path d="M64 56 H736" stroke="#b0242b" stroke-width="5"/>
+  <path d="M160 46 v34 M320 46 v34 M480 46 v34 M640 46 v34" stroke="#5a0a0e" stroke-width="3"/>
+  <!-- brass rail along the top -->
+  <rect x="56" y="22" width="688" height="10" rx="5" fill="#e0bd62" stroke="#000" stroke-width="4"/>
+  <!-- caster brackets the wheels hang from -->
+  <rect x="90" y="206" width="28" height="18" fill="#3a3540" stroke="#000" stroke-width="4"/>
+  <rect x="682" y="206" width="28" height="18" fill="#3a3540" stroke="#000" stroke-width="4"/>
+</svg>

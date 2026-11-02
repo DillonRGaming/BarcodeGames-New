@@ -33,6 +33,7 @@
   <canvas id="staticNoiseCanvas" class="static-noise"></canvas>
   <div id="blackout"></div>
   <div id="furnitureLayer"></div>
+  <div id="killingRoom" class="killing-room hidden"></div>
 
   <!-- Character Token Stage -->
   <div class="grid-container">
@@ -66,7 +67,7 @@
     <!-- Room Code Badge (Bottom-Right Angle) -->
     <div class="lobby-code-badge">
       <span class="code-label">Room code</span>
-      <div class="code-value" id="lobbyRoomCode">····</div>
+      <div class="code-value" id="lobbyRoomCode">XXXX</div>
     </div>
 
     <!-- Footer Start Prompt -->
@@ -103,10 +104,11 @@
   <div id="introOverlay" class="intro-overlay">
     <canvas id="introNoiseCanvas" class="intro-noise-canvas"></canvas>
     <div id="introLogo" class="intro-logo" aria-label="DYING TO KNOW"></div>
-    <button id="skipIntroBtn" class="skip-intro-btn hidden">Skip Intro [Esc]</button>
+    <button id="skipIntroBtn" class="skip-intro-btn hidden">Skip Intro</button>
   </div>
 
   <!-- Question & Answers Stage Overlay -->
+
   <div id="questionStage" class="question-stage hidden">
     <!-- Left: Question Text -->
     <div class="question-box">
@@ -139,6 +141,12 @@
     </div>
   </div>
 
+  <button id="skipRoundBtn" class="skip-intro-btn skip-round-btn hidden">Skip Round</button>
+
+  <div id="killTimer" class="question-timer kill-timer hidden">
+    <div id="killFlipClock"></div>
+  </div>
+
   <!-- Modular Scripts -->
   <script src="../../shared/room-host.js"></script>
   <script src="js/sound.js"></script>
@@ -147,6 +155,8 @@
   <script src="js/camera.js"></script>
   <script src="js/palette.js"></script>
   <script src="js/flip-clock.js"></script>
+  <script src="js/questions.js"></script>
+  <script src="js/killing-rooms.js"></script>
   <script src="js/manager.js"></script>
   <script src="js/main.js"></script>
 </body>

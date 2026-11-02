@@ -11,12 +11,16 @@
  *   { type: 'countdown' }                     3, 2, 1 before the game (VIP sees Cancel)
  *   { type: 'intro' }                         intro playing (VIP sees Skip Intro)
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
+ *   { type: 'sacrifice', reward }             10s to volunteer for the killing room (paid if you survive)
+ *   { type: 'plates', count }                 Room Service: pick a covered plate
  *
  * Messages to the host:
  *   { type: 'start' }                         VIP pressed "Everybody's in"
  *   { type: 'cancel' }                        VIP pressed "Cancel" during the countdown
  *   { type: 'skip' }                          VIP pressed "Skip Intro"
  *   { type: 'answer', index }                 0-based answer the player picked
+ *   { type: 'volunteer' }                     going into the killing room for the reward
+ *   { type: 'plate', index }                  0-based plate picked in Room Service
  */
 
 BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage }) => {
@@ -102,6 +106,36 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     });
   }
 
+  function showSacrifice(reward) {
+    body.innerHTML = '<button class="dtk-sacrifice" type="button"><span class="dtk-sacrifice-label">Volunteer</span><span class="dtk-sacrifice-reward"></span></button>';
+    const btn = body.querySelector('.dtk-sacrifice');
+    btn.querySelector('.dtk-sacrifice-reward').textContent = `£${reward}`;
+    btn.addEventListener('click', () => {
+      send({ type: 'volunteer' });
+      btn.disabled = true;
+    });
+  }
+
+  function showPlates(count) {
+    body.innerHTML = '<div class="dtk-plates"></div>';
+    const grid = body.querySelector('.dtk-plates');
+    for (let index = 0; index < count; index++) {
+      const btn = document.createElement('button');
+      btn.className = 'dtk-plate';
+      btn.type = 'button';
+      btn.innerHTML = '<img src="games/dying-to-know/assets/cloche.svg" alt=""><span></span>';
+      btn.querySelector('span').textContent = index + 1;
+      btn.addEventListener('click', () => {
+        send({ type: 'plate', index });
+        grid.querySelectorAll('.dtk-plate').forEach((b) => {
+          b.disabled = true;
+          b.classList.toggle('picked', b === btn);
+        });
+      });
+      grid.appendChild(btn);
+    }
+  }
+
   onMessage((data) => {
     if (data.type === 'show') {
       const btn = answerButtons[data.index];
@@ -144,6 +178,14 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         break;
       case 'wait':
         showMessage(data.text);
+        break;
+      case 'sacrifice':
+        // The reward drops as others volunteer: update the amount without resetting a pressed button
+        if (body.querySelector('.dtk-sacrifice')) body.querySelector('.dtk-sacrifice-reward').textContent = `£${data.reward}`;
+        else showSacrifice(data.reward);
+        break;
+      case 'plates':
+        showPlates(data.count || 4);
         break;
     }
     updateFooter();

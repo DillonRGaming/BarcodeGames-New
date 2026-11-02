@@ -5,6 +5,38 @@
  * 3D extrusion slicing, state-machine flips, lineup arcs, and blink handling.
  */
 
+/**
+ * Show `text` as X's (same length), then each character cycles through random letters and lands on
+ * the real one, left to right; each starts before the one before it has landed.
+ */
+function scrambleText(el, text, delay = 0) {
+  const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const SPIN_MS = 1000;   // how long each character cycles
+  const STAGGER_MS = 230; // next character starts this long after the one before
+  const STEP_MS = 65;     // how often a cycling character changes
+  el.textContent = text.replace(/[^\s]/g, 'X');
+
+  const token = (el.scrambleToken = {});
+  const start = performance.now() + delay;
+  const tick = () => {
+    if (el.scrambleToken !== token) return; // a newer scramble or rename took over
+    const now = performance.now();
+    let done = true;
+    const out = [...text].map((ch, i) => {
+      if (/\s/.test(ch)) return ch;
+      const t = now - (start + i * STAGGER_MS);
+      if (t >= SPIN_MS) return ch;
+      done = false;
+      if (t < 0) return 'X';
+      const c = POOL[Math.floor(Math.random() * 26)];
+      return /[a-z]/.test(ch) ? c.toLowerCase() : c;
+    });
+    el.textContent = out.join('');
+    if (!done) setTimeout(tick, STEP_MS);
+  };
+  setTimeout(tick, Math.max(0, delay));
+}
+
 class Player {
   constructor({ parentEl, textures, index, letter, sound, name = '', color = '#ffffff', tilt = -4, isVip = false, isVisible = true }) {
     this.parentEl = parentEl;
@@ -261,7 +293,7 @@ class Player {
     if (tilt !== null) this.nameTilt = tilt;
 
     if (this.nameEl) {
-      this.scrambleToken = null; // stop any name scramble
+      this.nameTextEl.scrambleToken = null; // stop any name scramble
       this.nameTextEl.textContent = this.name;
       this.nameEl.style.color = this.nameColor;
       this.nameEl.style.setProperty('--name-rot', `${this.nameTilt}deg`);
@@ -351,40 +383,9 @@ class Player {
     glow.addEventListener('animationend', () => glow.remove());
   }
 
-  /**
-   * Name starts as XXX (same length), then each letter cycles through random letters and lands on
-   * the real one, left to right; each starts before the one before it has landed.
-   */
+  /** Name starts as XXX (same length), then decodes letter by letter (see scrambleText) */
   scrambleName(delay = 0) {
-    const name = this.name || '';
-    const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const SPIN_MS = 1400;   // how long each letter cycles
-    const STAGGER_MS = 320; // next letter starts this long after the one before
-    const STEP_MS = 80;     // how often a cycling letter changes
-    const isLetter = (ch) => /[a-z]/i.test(ch);
-    this.nameTextEl.textContent = name.replace(/[^\s]/g, 'X');
-
-    const token = (this.scrambleToken = {});
-    const start = performance.now() + delay;
-    const tick = () => {
-      if (this.scrambleToken !== token) return; // a newer scramble or rename took over
-      const now = performance.now();
-      let done = true;
-      const out = [...name].map((ch, i) => {
-        if (/\s/.test(ch)) return ch;
-        const t = now - (start + i * STAGGER_MS);
-        if (t >= SPIN_MS) return ch;
-        done = false;
-        if (t < 0) return 'X';
-        const step = Math.floor(t / STEP_MS);
-        const pick = (i * 7 + step * 13 + Math.floor(Math.random() * 26)) % 26;
-        const c = POOL[pick];
-        return isLetter(ch) && ch === ch.toLowerCase() ? c.toLowerCase() : c;
-      });
-      this.nameTextEl.textContent = out.join('');
-      if (!done) setTimeout(tick, STEP_MS);
-    };
-    setTimeout(tick, Math.max(0, delay));
+    scrambleText(this.nameTextEl, this.name || '', delay);
   }
 
   startReviveSpin() {
@@ -404,7 +405,7 @@ class Player {
   /**
    * Start smooth lineup flight trajectory
    */
-  startFlight({ from, to, delay, dur = 850, now = performance.now() }) {
+  startFlight({ from, to, delay, dur = 850, now = performance.now(), arc = true }) {
     this.inFlight = true;
     this.flightStart = now + delay;
     this.flightDelay = delay;
@@ -415,7 +416,9 @@ class Player {
 
     // Pure vertical parabolic arc control point (Zero sideways tilt or random jitter)
     this.flightCtrlX = (from.cx + to.cx) / 2;
-    this.flightCtrlY = Math.min(from.cy, to.cy) - Math.max(50, Math.abs(from.cy - to.cy) * 0.45);
+    this.flightCtrlY = arc
+      ? Math.min(from.cy, to.cy) - Math.max(50, Math.abs(from.cy - to.cy) * 0.45)
+      : (from.cy + to.cy) / 2; // straight slide
 
     this.wrapper.style.transition = 'none';
 
@@ -503,17 +506,19 @@ class Player {
    * Trigger character eye blink
    */
   blink(doubleBlinkChance = 0.28) {
-    if (!this.isAlive()) return;
+    // In the dark only the eyes show; a blink would put the whole face back
+    const canBlink = () => this.isAlive() && !this.eyesMode;
+    if (!canBlink()) return;
     this.frontImg.src = this.textures.blink;
     setTimeout(() => {
-      if (!this.isAlive()) return;
+      if (!canBlink()) return;
       this.frontImg.src = this.textures.front;
       if (Math.random() < doubleBlinkChance) {
         setTimeout(() => {
-          if (!this.isAlive()) return;
+          if (!canBlink()) return;
           this.frontImg.src = this.textures.blink;
           setTimeout(() => {
-            if (this.isAlive()) this.frontImg.src = this.textures.front;
+            if (canBlink()) this.frontImg.src = this.textures.front;
           }, 110);
         }, 70);
       }
@@ -524,6 +529,7 @@ class Player {
    * Show baked eyes texture during blackout transition
    */
   setEyesMode(active) {
+    this.eyesMode = active;
     if (active) {
       if (this.textures.eyes) {
         this.frontImg.src = this.textures.eyes;

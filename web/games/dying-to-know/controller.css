@@ -269,3 +269,54 @@ body[data-game='dying-to-know'] {
 .dtk-name {
   transform: translateY(0.15em);
 }
+
+/* Room Service: four covered plates, 2 x 2 */
+.dtk-plates {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.dtk-plate {
+  appearance: none;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px;
+  border: 0;
+  background: none;
+  color: #ffffff;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: 30px;
+  cursor: pointer;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dtk-plate img { width: 100%; }
+.dtk-plate:active { transform: scale(0.94); }
+.dtk-plate:disabled { opacity: 0.22; cursor: default; }
+.dtk-plate.picked { opacity: 1; transform: scale(1.08); }
+
+/* Killing room offer: one big volunteer button with the current reward */
+.dtk-sacrifice {
+  appearance: none;
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 26px 16px;
+  border: 3px solid #ffffff;
+  border-radius: 12px;
+  background: #ff2200;
+  color: #ffffff;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  cursor: pointer;
+}
+.dtk-sacrifice-label { font-size: 30px; }
+.dtk-sacrifice-reward { font-size: 46px; }
+.dtk-sacrifice:active { transform: scale(0.96); }
+.dtk-sacrifice:disabled { background: #000000; cursor: default; }
