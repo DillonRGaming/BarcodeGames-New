@@ -14,6 +14,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 const ROOT = __dirname;
+const WEB_ROOT = path.join(ROOT, '..', '..', 'web');
 const DEFAULT_GAME = 'dying-to-know';
 
 const args = process.argv.slice(1);
@@ -36,8 +37,13 @@ function serveAppFiles() {
   // barcode://app/<path> → <ROOT>/<path>, refusing anything outside ROOT
   protocol.handle('barcode', (req) => {
     const { pathname } = new URL(req.url);
-    const filePath = path.normalize(path.join(ROOT, decodeURIComponent(pathname)));
-    if (!filePath.startsWith(ROOT + path.sep)) return new Response('Forbidden', { status: 403 });
+    // barcode://app/phone/... → the repo's web/ folder, so the mod menu's embedded phone runs the
+    // latest local phone code (only exists in a dev checkout, not in packaged builds)
+    const phone = pathname.startsWith('/phone/');
+    const base = phone ? WEB_ROOT : ROOT;
+    const rel = phone ? pathname.slice('/phone'.length) : pathname;
+    const filePath = path.normalize(path.join(base, decodeURIComponent(rel)));
+    if (!filePath.startsWith(base + path.sep)) return new Response('Forbidden', { status: 403 });
     return net.fetch(pathToFileURL(filePath).toString());
   });
 }

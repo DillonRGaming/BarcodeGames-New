@@ -51,10 +51,12 @@ class GameManager {
     this.questionBank = QUESTIONS;
     this.currentQuestionIdx = 0;
     this.roundToken = 0;
+    this.dev = { room: '', fast: false, skipOffer: false, fillRoom: false };
     this.skipRoundBtn = document.getElementById('skipRoundBtn');
     if (this.skipRoundBtn) this.skipRoundBtn.addEventListener('click', () => this.skipRound());
 
     this._initInput();
+    this.modMenu = new ModMenu(this);
     this._initLobbyUI();
     this._initRoom();
     this._startBlinkDirector();
@@ -148,7 +150,7 @@ class GameManager {
     const player = this.createPlayer({
       name: info.name,
       colorIndex,
-      isVip: this.players.length === 0,
+      isVip: !!info.id && !this.players.some((p) => p.isVip), // only a real phone player can be VIP; bots never are
     });
     player.colorIndex = colorIndex;
     if (DEV_RANDOM_MONEY) player.money = Math.round(Math.random() * 40) * 50; // £0–£2000
@@ -211,8 +213,8 @@ class GameManager {
     player.slot.remove();
     this.updateSlotCards();
 
-    if (player.isVip && this.players[0]) {
-      const next = this.players[0];
+    const next = player.isVip && this.players.find((p) => p.roomId);
+    if (next) {
       next.setVip(true);
       if (next.roomId) this.sendProfile(next.roomId, next);
     }
@@ -1351,9 +1353,57 @@ class GameManager {
      Input Event Coordination
      ========================================= */
 
+  /** Correct answer (1-based) of the question on screen */
+  currentCorrectIndex() {
+    const q = this.questionBank[this.currentQuestionIdx % this.questionBank.length];
+    return q.correctIndex || 1;
+  }
+
+  /** Mod menu: answer for a player (phone or bot) exactly as if they'd tapped it */
+  forceAnswer(player, index) {
+    if (!player || !this.acceptingAnswers || !(index >= 1 && index <= 4)) return;
+    if (player.roomId) {
+      if (this.answers.has(player.roomId)) return;
+      this.answers.set(player.roomId, index);
+      this.answerTimes.set(player.roomId, performance.now());
+    } else {
+      if (player.botChoice != null) return;
+      player.botChoice = index;
+      player.botAnsweredAt = performance.now();
+    }
+    player.blendWiggle(0, 0.35);
+    this.checkAllAnswered();
+  }
+
+  /** Mod menu: take a player (phone or bot) out of the game */
+  removePlayerObject(player) {
+    if (!player) return;
+    if (player.roomId) {
+      this.removePlayer(player.roomId);
+      if (this.net) this.net.kick(player.roomId);
+      return;
+    }
+    const idx = this.players.indexOf(player);
+    if (idx === -1) return;
+    this.players.splice(idx, 1);
+    player.slot.remove();
+    this.updateSlotCards();
+    const nextVip = player.isVip && this.players.find((p) => p.roomId);
+    if (nextVip) {
+      nextVip.setVip(true);
+      this.sendProfile(nextVip.roomId, nextVip);
+    }
+    if (this.sound) this.sound.playWhoosh();
+  }
+
   _initInput() {
     window.addEventListener('keydown', (e) => {
       if (!e.key) return;
+      if (e.key === '`') {
+        this.modMenu.toggle();
+        return;
+      }
+      if (e.target && e.target.closest && e.target.closest('.mod-menu, .mod-phones')) return; // using the menu
       const key = e.key.toLowerCase();
 
       // Number keys 1-8 to toggle player slots

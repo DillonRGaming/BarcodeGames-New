@@ -13,6 +13,7 @@
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
  *   { type: 'sacrifice', reward }             10s to volunteer for the killing room (paid if you survive)
  *   { type: 'plates', count }                 Room Service: pick a covered plate
+ *   { type: 'objects', options }              Baggage Claim: tick the items you saw ({ id, label, color })
  *
  * Messages to the host:
  *   { type: 'start' }                         VIP pressed "Everybody's in"
@@ -21,6 +22,7 @@
  *   { type: 'answer', index }                 0-based answer the player picked
  *   { type: 'volunteer' }                     going into the killing room for the reward
  *   { type: 'plate', index }                  0-based plate picked in Room Service
+ *   { type: 'objects', ids }                  items ticked in Baggage Claim
  */
 
 BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage }) => {
@@ -116,6 +118,30 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     });
   }
 
+  function showObjects(options) {
+    body.innerHTML = '<div class="dtk-objects"></div><button class="dtk-done" type="button">Done</button>';
+    const grid = body.querySelector('.dtk-objects');
+    const picked = new Set();
+    options.forEach((it) => {
+      const btn = document.createElement('button');
+      btn.className = 'dtk-object';
+      btn.type = 'button';
+      btn.innerHTML = '<i></i><span></span>';
+      btn.querySelector('i').style.background = it.color;
+      btn.querySelector('span').textContent = it.label;
+      btn.addEventListener('click', () => {
+        if (picked.has(it.id)) picked.delete(it.id); else picked.add(it.id);
+        btn.classList.toggle('picked', picked.has(it.id));
+      });
+      grid.appendChild(btn);
+    });
+    const done = body.querySelector('.dtk-done');
+    done.addEventListener('click', () => {
+      send({ type: 'objects', ids: [...picked] });
+      body.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    });
+  }
+
   function showPlates(count) {
     body.innerHTML = '<div class="dtk-plates"></div>';
     const grid = body.querySelector('.dtk-plates');
@@ -183,6 +209,9 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         // The reward drops as others volunteer: update the amount without resetting a pressed button
         if (body.querySelector('.dtk-sacrifice')) body.querySelector('.dtk-sacrifice-reward').textContent = `£${data.reward}`;
         else showSacrifice(data.reward);
+        break;
+      case 'objects':
+        showObjects(data.options || []);
         break;
       case 'plates':
         showPlates(data.count || 4);

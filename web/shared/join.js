@@ -44,6 +44,8 @@
   /* ---------- Join form ---------- */
 
   const params = new URLSearchParams(location.search);
+  // ?slot=N gives several phones on one screen (the host's mod menu) their own saved session
+  const sessionKey = params.get('slot') ? `${SESSION_KEY}:${params.get('slot')}` : SESSION_KEY;
   codeInput.value = (params.get('code') || '').toUpperCase().slice(0, 4);
   nameInput.value = store.get(localStorage, NAME_KEY) || '';
 
@@ -133,7 +135,7 @@
     });
     client.on('error', (err) => {
       if (client.player && err.code !== 'OFFLINE') return; // in-game errors don't kick you out
-      store.remove(sessionStorage, SESSION_KEY);
+      store.remove(sessionStorage, sessionKey);
       showJoinScreen();
       showError(err.message);
     });
@@ -147,7 +149,7 @@
   }
 
   async function onJoined(msg) {
-    store.set(sessionStorage, SESSION_KEY, { code: msg.code, name: msg.player.name, playerToken: msg.playerToken });
+    store.set(sessionStorage, sessionKey, { code: msg.code, name: msg.player.name, playerToken: msg.playerToken });
     if (msg.reconnected && !gameScreen.classList.contains('hidden')) return;
 
     try {
@@ -195,7 +197,7 @@
   }
 
   function endGame(message) {
-    store.remove(sessionStorage, SESSION_KEY);
+    store.remove(sessionStorage, sessionKey);
     hideNotice();
     showJoinScreen();
     showError(message);
@@ -220,7 +222,7 @@
 
   /* ---------- Rejoin after a refresh ---------- */
 
-  const saved = store.get(sessionStorage, SESSION_KEY);
+  const saved = store.get(sessionStorage, sessionKey);
   if (saved && saved.code && saved.playerToken) {
     codeInput.value = saved.code;
     nameInput.value = saved.name || nameInput.value;

@@ -22,6 +22,39 @@ const TAKEN_SCALE = 1.3;
 const VOLUNTEER_SCALE = 0.8;
 const MAX_VOLUNTEERS = 2; // the room holds the taken player plus two
 
+/** Dev settings live on the manager (see the dev panel); timers shrink in fast mode */
+const devOf = (m) => m.dev || {};
+const secs = (m, normal) => (devOf(m).fast ? Math.min(normal, 4) : normal);
+
+/** Fisher-Yates copy */
+const shuffled = (list) => {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+/** Players walk up to a row near the top of a room, one after another like flyTo */
+async function takePlacesRow(manager, players) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const gap = 125 * 0.8 + Math.min(Math.max(24, w * 0.036), 64);
+  const targets = new Map(players.map((p, i) => [p, { x: w / 2 + (i - (players.length - 1) / 2) * gap, y: h * 0.3, k: 0.8 }]));
+  await manager.placeForKilling(targets, 850, new Set(), 90);
+  await wait(1500);
+}
+
+/** A player's letter tag, in their colour */
+function letterTag(player, extra = '') {
+  const tag = document.createElement('span');
+  tag.className = `kr-tag ${extra}`;
+  tag.textContent = player.letter;
+  tag.style.setProperty('--tag-color', player.nameColor);
+  return tag;
+}
+
 let sharedKillClock = null;
 const killClock = () => sharedKillClock || (sharedKillClock = new FlipClock(document.getElementById('killFlipClock'), 2));
 
@@ -75,16 +108,20 @@ class KillingRoomDirector {
     m.placeForKilling(this.offerLayout());
     await wait(1100);
 
-    // 2. Ten seconds for anyone else to volunteer
-    this.offerOpen = true;
-    candidates.forEach((p) => {
-      if (p.roomId) m.net.sendTo(p.roomId, { type: 'sacrifice', reward: this.rewardFor(0) });
-      else if (Math.random() < 0.3) setTimeout(() => this.volunteer(p), 1200 + Math.random() * 7500);
-    });
-    this.clock.set(SACRIFICE_SECONDS, false);
-    this.clockEl.classList.remove('hidden', 'urgent');
-    if (m.sound) m.sound.playTick(0.85);
-    for (let s = SACRIFICE_SECONDS - 1; s >= 0 && !this.offerFull(candidates); s--) {
+    // 2. Ten seconds for anyone else to volunteer (dev can skip this or make every bot volunteer)
+    const offerSeconds = devOf(m).skipOffer ? 0 : secs(m, SACRIFICE_SECONDS);
+    this.offerOpen = offerSeconds > 0;
+    if (this.offerOpen) {
+      candidates.forEach((p, i) => {
+        if (p.roomId) m.net.sendTo(p.roomId, { type: 'sacrifice', reward: this.rewardFor(0) });
+        else if (devOf(m).fillRoom) setTimeout(() => this.volunteer(p), 500 + i * 450);
+        else if (Math.random() < 0.3) setTimeout(() => this.volunteer(p), 1200 + Math.random() * (offerSeconds - 2) * 1000);
+      });
+      this.clock.set(offerSeconds, false);
+      this.clockEl.classList.remove('hidden', 'urgent');
+      if (m.sound) m.sound.playTick(0.85);
+    }
+    for (let s = offerSeconds - 1; s >= 0 && !this.offerFull(candidates); s--) {
       await wait(1000);
       if (this.offerFull(candidates)) break;
       this.clock.set(s);
@@ -115,7 +152,8 @@ class KillingRoomDirector {
     });
     if (m.room) m.room.setBlackout(1);
     this.scene.classList.remove('hidden');
-    const Room = KILLING_ROOMS[Math.floor(Math.random() * KILLING_ROOMS.length)];
+    const forced = KILLING_ROOMS.find((R) => R.id === devOf(m).room);
+    const Room = forced || KILLING_ROOMS[Math.floor(Math.random() * KILLING_ROOMS.length)];
     this.room = new Room(m, this.scene);
     this.room.build(players);
     players.forEach((p) => p.setEyesMode(true));
@@ -219,6 +257,8 @@ class KillingRoomDirector {
  * empty, the trolley shuffles, then everyone in the room picks a plate. Only the empty one is safe.
  */
 class RoomService {
+  static id = 'room-service';
+  static title = 'Room Service';
   static PLATES = 4;
   static PICK_SECONDS = 10;
   static SWAPS = 8;
@@ -261,14 +301,8 @@ class RoomService {
     this.place(0);
   }
 
-  /** Players walk up to a row behind the trolley, one after another like flyTo */
-  async takePlaces(players) {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const gap = 125 * 0.8 + Math.min(Math.max(24, w * 0.036), 64);
-    const targets = new Map(players.map((p, i) => [p, { x: w / 2 + (i - (players.length - 1) / 2) * gap, y: h * 0.3, k: 0.8 }]));
-    await this.manager.placeForKilling(targets, 850, new Set(), 90);
-    await wait(1500);
+  takePlaces(players) {
+    return takePlacesRow(this.manager, players);
   }
 
   place(ms) {
@@ -324,10 +358,11 @@ class RoomService {
       else setTimeout(() => this.pick(p, Math.floor(Math.random() * n)), 1500 + Math.random() * 6000);
     });
     m.phoneState = { type: 'wait' }; // a reconnecting phone shouldn't get a second pick
-    clock.set(RoomService.PICK_SECONDS, false);
+    const pickSeconds = secs(m, RoomService.PICK_SECONDS);
+    clock.set(pickSeconds, false);
     clockEl.classList.remove('hidden', 'urgent');
     if (m.sound) m.sound.playTick(0.85);
-    for (let s = RoomService.PICK_SECONDS - 1; s >= 0 && this.picks.size < players.length; s--) {
+    for (let s = pickSeconds - 1; s >= 0 && this.picks.size < players.length; s--) {
       await wait(1000);
       clock.set(s);
       clockEl.classList.toggle('urgent', s <= 3);
@@ -378,12 +413,8 @@ class RoomService {
     if (!this.picking || this.picks.has(player) || !this.players.includes(player)) return;
     if (!(slot >= 0 && slot < RoomService.PLATES)) return;
     this.picks.set(player, slot);
-    const tag = document.createElement('span');
-    tag.className = 'kr-tag';
-    tag.textContent = player.letter;
-    tag.style.setProperty('--tag-color', player.nameColor);
     const col = this.scene.querySelectorAll('.kr-rs-guesses span')[slot];
-    if (col) col.appendChild(tag);
+    if (col) col.appendChild(letterTag(player));
     if (this.manager.sound) this.manager.sound.playLight();
   }
 
@@ -392,4 +423,217 @@ class RoomService {
   }
 }
 
-const KILLING_ROOMS = [RoomService];
+/**
+ * Baggage Claim: 5 or 6 items glide across the screen, left to right. Then everyone picks,
+ * from 10 on their phone, the ones they saw. The real items come back one by one with
+ * the letters of whoever remembered them; wrong picks show in a row of their own. Score is right
+ * picks minus wrong picks, and the lowest score dies (nobody dies if everyone was perfect).
+ *
+ * Art: each item shows `art` (assets/images/killing/baggage-claim/<id>.png): real photos hand-picked
+ * from Pixabay, sources in credits.json there. A missing file falls back to a coloured rectangle.
+ */
+const BAGGAGE_ITEMS = [
+  { id: 'alarm-clock', label: "Alarm clock", color: '#d64545' },
+  { id: 'binoculars', label: "Binoculars", color: '#3f6fd8' },
+  { id: 'boombox', label: "Boombox", color: '#3f9e5a' },
+  { id: 'briefcase', label: "Briefcase", color: '#e9c23f' },
+  { id: 'candlestick', label: "Candlestick", color: '#8b4fc7' },
+  { id: 'cassette-recorder', label: "Cassette recorder", color: '#e8833a' },
+  { id: 'chandelier', label: "Chandelier", color: '#e86aa8' },
+  { id: 'compass', label: "Compass", color: '#8a5a33' },
+  { id: 'fedora', label: "Fedora hat", color: '#7d8590' },
+  { id: 'film-projector', label: "Film projector", color: '#2fa8a0' },
+  { id: 'globe', label: "Globe", color: '#d64545' },
+  { id: 'gramophone', label: "Gramophone", color: '#3f6fd8' },
+  { id: 'headphones', label: "Headphones", color: '#3f9e5a' },
+  { id: 'hourglass', label: "Hourglass", color: '#e9c23f' },
+  { id: 'lantern', label: "Oil lantern", color: '#e8833a' },
+  { id: 'lighter', label: "Lighter", color: '#e86aa8' },
+  { id: 'magnifying-glass', label: "Magnifying glass", color: '#8a5a33' },
+  { id: 'old-camera', label: "Old camera", color: '#7d8590' },
+  { id: 'old-key', label: "Old key", color: '#2fa8a0' },
+  { id: 'padlock', label: "Padlock", color: '#3f6fd8' },
+  { id: 'pocket-watch', label: "Pocket watch", color: '#3f9e5a' },
+  { id: 'record-player', label: "Record player", color: '#8b4fc7' },
+  { id: 'revolver', label: "Revolver", color: '#e8833a' },
+  { id: 'rotary-phone', label: "Rotary phone", color: '#e86aa8' },
+  { id: 'satchel', label: "Leather satchel", color: '#8a5a33' },
+  { id: 'sewing-machine', label: "Sewing machine", color: '#7d8590' },
+  { id: 'sneaker', label: "Sneaker", color: '#2fa8a0' },
+  { id: 'suitcase', label: "Suitcase", color: '#d64545' },
+  { id: 'teapot', label: "Silver teapot", color: '#3f6fd8' },
+  { id: 'teddy-bear', label: "Teddy bear", color: '#3f9e5a' },
+  { id: 'trumpet', label: "Trumpet", color: '#8b4fc7' },
+  { id: 'typewriter', label: "Typewriter", color: '#e8833a' },
+  { id: 'umbrella', label: "Umbrella", color: '#e86aa8' },
+  { id: 'vhs-tape', label: "VHS tape", color: '#8a5a33' },
+  { id: 'wristwatch', label: "Wristwatch", color: '#7d8590' },
+].map((it) => ({ ...it, art: `${ROOM_ART}/baggage-claim/${it.id}.png` }));
+
+class BaggageClaim {
+  static id = 'baggage-claim';
+  static title = 'Baggage Claim';
+  static OPTIONS = 10;
+  static PICK_SECONDS = 15;
+  static RIDE_MS = 5200;   // one case crossing the screen
+  static SPACING_MS = 1150; // gap between items crossing
+
+  constructor(manager, scene) {
+    this.manager = manager;
+    this.scene = scene;
+    this.picks = new Map(); // player → Set of item ids
+  }
+
+  build(players) {
+    this.players = players;
+    const options = shuffled(BAGGAGE_ITEMS).slice(0, BaggageClaim.OPTIONS);
+    this.shown = options.slice(0, Math.random() < 0.5 ? 5 : 6);
+    this.options = shuffled(options); // phone order gives nothing away
+    this.scene.style.backgroundImage = `url('${ROOM_ART}/room-service/background.png')`;
+    this.scene.innerHTML = `
+      <div class="kr-bc">
+        <div class="kr-bc-lane"></div>
+        <div class="kr-bc-prompt hidden">What objects did you see?</div>
+        <div class="kr-bc-wrong"></div>
+      </div>`;
+    this.lane = this.scene.querySelector('.kr-bc-lane');
+  }
+
+  takePlaces(players) {
+    return takePlacesRow(this.manager, players);
+  }
+
+  item(it, extra = '') {
+    const el = document.createElement('div');
+    el.className = `kr-bc-item ${extra}`;
+    el.style.setProperty('--c', it.color);
+    el.innerHTML = '<div class="kr-bc-tags"></div><div class="kr-bc-box"><img alt=""></div><span></span>';
+    el.querySelector('span').textContent = it.label;
+    const img = el.querySelector('img');
+    img.addEventListener('load', () => el.classList.add('has-art'));
+    img.src = it.art;
+    return el;
+  }
+
+  async run(players) {
+    const m = this.manager;
+    const clockEl = document.getElementById('killTimer');
+    const clock = killClock();
+
+    // 1. The items glide across one after another, left to right
+    this.shown.forEach((it, i) => {
+      setTimeout(() => {
+        if (this.manager.killingRoom && this.manager.killingRoom.aborted) return;
+        const el = this.item(it, 'riding');
+        el.style.transitionDuration = `${BaggageClaim.RIDE_MS}ms`;
+        this.lane.appendChild(el);
+        void el.offsetWidth;
+        el.classList.add('across');
+        if (m.sound) m.sound.playWhoosh();
+      }, i * BaggageClaim.SPACING_MS);
+    });
+    await wait((this.shown.length - 1) * BaggageClaim.SPACING_MS + BaggageClaim.RIDE_MS + 300);
+    this.lane.innerHTML = '';
+
+    // 2. What did you see? Everyone picks on their phone
+    const prompt = this.scene.querySelector('.kr-bc-prompt');
+    prompt.classList.remove('hidden');
+    if (m.sound) m.sound.playSlam(0.7);
+    this.picks = new Map();
+    this.picking = true;
+    const shownIds = new Set(this.shown.map((it) => it.id));
+    players.forEach((p) => {
+      if (p.roomId) {
+        m.net.sendTo(p.roomId, { type: 'objects', options: this.options.map(({ id, label, color }) => ({ id, label, color })) });
+      } else {
+        // bots remember most of what they saw and sometimes imagine things
+        setTimeout(() => {
+          const ids = this.options.filter((it) => (shownIds.has(it.id) ? Math.random() < 0.75 : Math.random() < 0.15)).map((it) => it.id);
+          this.pick(p, ids);
+        }, 1500 + Math.random() * 5000);
+      }
+    });
+    m.phoneState = { type: 'wait' };
+    const pickSeconds = secs(m, BaggageClaim.PICK_SECONDS);
+    clock.set(pickSeconds, false);
+    clockEl.classList.remove('hidden', 'urgent');
+    if (m.sound) m.sound.playTick(0.85);
+    for (let s = pickSeconds - 1; s >= 0 && this.picks.size < players.length; s--) {
+      await wait(1000);
+      clock.set(s);
+      clockEl.classList.toggle('urgent', s <= 5);
+      if (s > 0 && m.sound) m.sound.playTick(0.85);
+    }
+    this.picking = false;
+    players.forEach((p) => { if (p.roomId) m.net.sendTo(p.roomId, { type: 'wait' }); });
+    await wait(700);
+    clockEl.classList.add('hidden');
+    prompt.classList.add('hidden');
+
+    // 3. The real items come back and stop in a row, with who remembered each
+    const n = this.shown.length;
+    for (let i = 0; i < n; i++) {
+      const it = this.shown[i];
+      const el = this.item(it, 'riding');
+      el.style.transitionDuration = '900ms';
+      el.style.setProperty('--stop', `${((i + 0.5) / n) * 76 + 12}vw`);
+      this.lane.appendChild(el);
+      void el.offsetWidth;
+      el.classList.add('parked');
+      if (m.sound) m.sound.playWhoosh();
+      await wait(950);
+      const tags = el.querySelector('.kr-bc-tags');
+      players.forEach((p) => { if ((this.picks.get(p) || new Set()).has(it.id)) tags.appendChild(letterTag(p, 'good')); });
+      if (tags.children.length && m.sound) m.sound.playLight();
+      await wait(550);
+    }
+
+    // 4. Anything picked that was never shown
+    const wrongRow = this.scene.querySelector('.kr-bc-wrong');
+    const wrongItems = this.options.filter((it) => !shownIds.has(it.id) && players.some((p) => (this.picks.get(p) || new Set()).has(it.id)));
+    for (const it of wrongItems) {
+      const el = this.item(it, 'wrong');
+      const tags = el.querySelector('.kr-bc-tags');
+      players.forEach((p) => { if ((this.picks.get(p) || new Set()).has(it.id)) tags.appendChild(letterTag(p, 'bad')); });
+      wrongRow.appendChild(el);
+      if (m.sound) m.sound.playSwish(0.7);
+      await wait(700);
+    }
+    await wait(900);
+
+    // 5. Right picks minus wrong picks; the lowest score dies unless everyone was perfect
+    //    (a lone player gets one slip)
+    const score = (p) => {
+      const picked = this.picks.get(p) || new Set();
+      let v = 0;
+      picked.forEach((id) => { v += shownIds.has(id) ? 1 : -1; });
+      return v;
+    };
+    const scores = players.map(score);
+    const worst = Math.min(...scores);
+    let losers;
+    if (players.length === 1) losers = scores[0] < n - 1 ? [...players] : []; // alone: one slip is allowed
+    else if (scores.every((v) => v === n)) losers = []; // everyone perfect
+    else losers = players.filter((p, i) => scores[i] === worst);
+    for (const p of losers) {
+      p.startDeathSpin();
+      await wait(450);
+    }
+    await wait(losers.length ? 2600 : 1200);
+    return losers;
+  }
+
+  /** A player sent the items they remember; first answer counts */
+  pick(player, ids) {
+    if (!this.picking || this.picks.has(player) || !this.players.includes(player)) return;
+    const valid = new Set(this.options.map((it) => it.id));
+    this.picks.set(player, new Set((ids || []).filter((id) => valid.has(id))));
+    if (this.manager.sound) this.manager.sound.playLight();
+  }
+
+  onMessage(player, data) {
+    if (data.type === 'objects') this.pick(player, data.ids);
+  }
+}
+
+const KILLING_ROOMS = [RoomService, BaggageClaim];

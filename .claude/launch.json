@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dying-to-know-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8777",
+        "--directory",
+        "app/core"
+      ],
+      "port": 8777
+    },
+    {
+      "name": "scratch-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8788",
+        "--directory",
+        "/tmp/claude-1000/-home-dillon-Documents-Trivia/84d48529-6b22-4017-bc76-0cbd19d9dee4/scratchpad"
+      ],
+      "port": 8788
+    }
+  ]
+}
