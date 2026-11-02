@@ -4,7 +4,7 @@
 
 const MAX_PLAYERS = 8;
 const DEV_RANDOM_MONEY = true; // testing: everyone starts with £0–£2000 instead of £100
-const DEV_BOTS = 4; // simulated players for testing; 0 to turn off
+const DEV_BOTS = 0; // simulated players for testing; 0 to turn off
 
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {
@@ -404,6 +404,7 @@ class GameManager {
     this.isIntroSkipped = true;
     this.isIntroRunning = false;
     this.gameState = 'PLAYING';
+    if (this.gameRoomCodeEl) this.gameRoomCodeEl.classList.remove('hidden');
     if (this.skipRoundBtn) this.skipRoundBtn.classList.remove('hidden');
     this.setPhoneState({ type: 'wait' });
 
@@ -472,7 +473,7 @@ class GameManager {
     if (this.room) this.room.bgScrolling = false;
 
     const ranked = [...this.players].sort((a, b) => b.money - a.money); // sort is stable: ties keep join order
-    ranked.forEach((p, i) => p.slot.style.setProperty('--rank', i));
+    ranked.forEach((p, i) => p.slot.style.setProperty('--rank', ranked.length - 1 - i)); // richest on the right
 
     const flight = await this.flyTo('scoreboard');
     await wait(flight + 250);
@@ -541,6 +542,7 @@ class GameManager {
     this.isIntroRunning = true;
     this.isIntroSkipped = false;
     this.gameState = 'INTRO';
+    if (this.gameRoomCodeEl) this.gameRoomCodeEl.classList.remove('hidden');
     if (this.net) {
       this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
       this.setPhoneState({ type: 'intro' }); // VIP's phone gets a Skip Intro button
@@ -685,6 +687,7 @@ class GameManager {
 
     if (this.skipIntroBtn) this.skipIntroBtn.classList.add('hidden');
     this.gameState = 'PLAYING';
+    if (this.gameRoomCodeEl) this.gameRoomCodeEl.classList.remove('hidden');
     if (this.skipRoundBtn) this.skipRoundBtn.classList.remove('hidden');
     this.setPhoneState({ type: 'wait' });
 
@@ -727,7 +730,7 @@ class GameManager {
     const data = questionData || currentQ;
 
     if (this.questionTextEl) {
-      this.questionTextEl.innerHTML = data.question;
+      scrambleQuick(this.questionTextEl, data.question);
     }
 
     if (this.answersListEl) {
@@ -740,7 +743,7 @@ class GameManager {
         if (items[i]) {
           const textEl = items[i].querySelector('.answer-text');
           const numEl = items[i].querySelector('.answer-num');
-          if (textEl) textEl.textContent = ans.text;
+          if (textEl) textEl.textContent = ans.text.replace(/\S/g, 'X'); // decodes as it shows
           if (numEl && ans.num) numEl.textContent = ans.num;
           items[i].classList.remove('visible', 'correct-choice');
         }
@@ -784,6 +787,8 @@ class GameManager {
     for (let i = 0; i < items.length; i++) {
       if (!this.isQuestionActive) return;
       items[i].classList.add('visible');
+      const textEl = items[i].querySelector('.answer-text');
+      if (textEl && answerTexts[i] != null) scrambleQuick(textEl, answerTexts[i]);
       this.net.broadcast({ type: 'show', index: i });
       this.phoneState = { type: 'question', answers: answerTexts, shown: i + 1, open: false };
       if (this.sound) {
@@ -903,7 +908,7 @@ class GameManager {
           p.clearResult(1.0);
         });
       }
-    });
+    }, () => { if (director) director.phonesOut(); });
   }
 
   /** Everyone has locked in: the clock goes to 0 now and the round carries on as if it ran out */
@@ -947,7 +952,7 @@ class GameManager {
     }
     this.killingRoom = null;
     this.setPhoneState({ type: 'wait' });
-    this.runRoomTransitionLoop(() => director.leave()); // out of the killing room like any room change
+    this.runRoomTransitionLoop(() => director.leave(), () => director.phonesOut()); // out of the killing room like any room change
   }
 
   async handleQuestionTimeout() {
@@ -956,6 +961,11 @@ class GameManager {
     const skipped = () => round !== this.roundToken;
     const currentQ = this.questionBank[this.currentQuestionIdx % this.questionBank.length];
     const correctIdx = currentQ.correctIndex || 1; // 1-indexed
+
+    // A beat on 0 before anything is revealed
+    this.acceptingAnswers = false;
+    await new Promise((r) => setTimeout(r, 1000));
+    if (skipped()) return;
 
     // 1. Reveal answers on the question board (wrong choices dim, correct choice gets slightly smaller)
     if (this.answersListEl) {
@@ -1003,12 +1013,24 @@ class GameManager {
     // 5b. The last living player to answer is taken to the killing room (volunteers may join)
     const taken = this.lastToAnswer();
     if (taken) {
+      // Ticks fade first, then the room winds down: scrolling coasts to a stop (~2s), everyone
+      // freezes and the music fades out with it. A beat of silence, then the killing room starts.
+      this.players.forEach((p) => p.fadeResultBadge());
+      activePlayers.forEach((p) => p.settleResult(0.72)); // wrong answers stop looking wrong as the ticks go
+      await new Promise((r) => setTimeout(r, 900));
+      if (skipped()) return;
+      if (this.room) this.room.bgScrolling = false;
+      this.players.forEach((p) => { if (p.isAlive()) p.blendWiggle(0, 1.8); });
+      if (this.sound) this.sound.fadeMusicOut(2200);
+      await new Promise((r) => setTimeout(r, 2800));
+      if (skipped()) return;
       await this.runKillingRoom(taken); // ends with the room change into the next question
       return;
     }
 
     // 6. Return players to the center 2x4 grid
     this.players.forEach((p) => p.fadeResultBadge());
+    activePlayers.forEach((p) => p.settleResult(0.72));
     await new Promise((r) => setTimeout(r, 450));
     if (skipped()) return;
     this.players.forEach((p) => {
@@ -1030,102 +1052,87 @@ class GameManager {
      Room Blackout Transition Loop
      ========================================= */
 
-  runRoomTransitionLoop(onDark = null) {
+  /**
+   * The room change: everyone freezes, the build plays, a slam cuts to black with only eyes
+   * showing, and 3.2s later the lights come back. Resolves once everyone is moving again.
+   * Every room change uses this: between questions, into and out of the killing room, and the
+   * death scene. `switchBg` moves the hotel on to its next room; `still` stays frozen afterwards.
+   */
+  async roomChange({ onDark = null, onLight = null, switchBg = true, still = [] } = {}) {
+    const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // 1. Stop background scrolling, freeze everyone, build sound
+    if (this.room) this.room.bgScrolling = false;
+    this.players.forEach((p) => { if (p.isAlive()) p.blendWiggle(0, 1.0); });
+    setTimeout(() => { if (this.sound) this.sound.playBuild(); }, 300);
+    await pause(2400);
+
+    // 2. Slam to black, only eyes showing
+    if (this.sound) this.sound.playSlam(1.0);
+    if (this.room) {
+      this.room.setBlackout(1);
+      if (switchBg) this.room.switchBackground();
+    }
+    if (onDark) onDark();
+    this.players.forEach((p) => { if (p.isAlive()) p.setEyesMode(true); });
+    if (this.grid) this.grid.classList.add('eyes-only');
+    await pause(3200);
+
+    // 3. Lights back on
+    if (this.room) this.room.setBlackout(0);
+    if (this.grid) this.grid.classList.remove('eyes-only');
+    if (onLight) onLight();
+    this.players.forEach((p) => p.setEyesMode(false));
+    if (this.sound) {
+      this.sound.playLight();
+      this.sound.playSlam(1.0);
+      setTimeout(() => { if (this.sound) this.sound.playEchoBell(); }, 500);
+    }
+    await pause(1200);
+    this.players.forEach((p) => { if (p.isAlive() && !still.includes(p)) p.blendWiggle(1.0, 0.45); });
+  }
+
+  /* Between questions: a room change, then the next question */
+  async runRoomTransitionLoop(onDark = null, onLight = null) {
     if (this.isTransitioning) return;
     this.isTransitioning = true;
     const round = ++this.roundToken; // a skip after the lights come up stops this run and starts its own
     const skipped = () => round !== this.roundToken;
 
-    // 1. Stop background scrolling
-    if (this.room) {
-      this.room.bgScrolling = false;
-    }
-
-    // 2. Freeze players' wiggle
-    this.players.forEach((p) => {
-      if (p.isAlive()) {
-        p.blendWiggle(0, 1.0);
-      }
-    });
-
-    // 3. Play build sound cue
-    setTimeout(() => {
-      if (this.sound) this.sound.playBuild();
-    }, 300);
-
-    const CUT_MS = 2400;
-
-    // 4. Blackout & switch background - PLAY SLAM HERE!
-    setTimeout(async () => {
-      if (this.sound) {
-        this.sound.playSlam(1.0);
-      }
-
-      if (this.room) {
-        this.room.setBlackout(1);
-        this.room.switchBackground();
-      }
-      if (onDark) onDark();
-
-      this.players.forEach((p) => {
-        if (p.isAlive()) p.setEyesMode(true);
-      });
-      if (this.grid) this.grid.classList.add('eyes-only');
-
-      // 5. Wait 3.2s in blackout with eyes showing before restoring room lights
-      setTimeout(async () => {
-        if (this.room) this.room.setBlackout(0);
-        if (this.grid) this.grid.classList.remove('eyes-only');
-
-        this.players.forEach((p) => {
-          p.setEyesMode(false);
-        });
-
-        if (this.sound) {
-          this.sound.playLight();
-          this.sound.playSlam(1.0);
-          setTimeout(() => {
-            if (this.sound) this.sound.playEchoBell();
-          }, 500);
-        }
+    await this.roomChange({
+      onDark,
+      onLight: () => {
+        if (onLight) onLight();
         this.roomRoundCount++;
         this.playRoomMusic(this.roomRoundCount, 2500);
+      },
+    });
+    this.isTransitioning = false;
 
-        setTimeout(async () => {
-          this.players.forEach((p) => {
-            if (p.isAlive()) p.blendWiggle(1.0, 0.45);
-          });
-          this.isTransitioning = false;
+    // Advance to next question!
+    this.currentQuestionIdx++;
+    const nextQ = this.questionBank[this.currentQuestionIdx % this.questionBank.length];
 
-          // Advance to next question!
-          this.currentQuestionIdx++;
-          const nextQ = this.questionBank[this.currentQuestionIdx % this.questionBank.length];
+    // Wait 2.0s in the center 2x4 grid in the new room
+    await new Promise((r) => setTimeout(r, 2000));
+    if (skipped()) return;
 
-          // Wait 2.0s in the center 2x4 grid in the new room
-          await new Promise((r) => setTimeout(r, 2000));
-          if (skipped()) return;
+    // Every 3 rounds, the scoreboard before the next question
+    if (this.currentQuestionIdx % 3 === 0) await this.showScoreboard();
+    if (skipped()) return;
 
-          // Every 3 rounds, the scoreboard before the next question
-          if (this.currentQuestionIdx % 3 === 0) await this.showScoreboard();
-          if (skipped()) return;
+    // Move to top lineup
+    this.flyTo('lineup');
 
-          // Move to top lineup
-          this.flyTo('lineup');
+    // 1.5s later, start room moving
+    await new Promise((r) => setTimeout(r, 1500));
+    if (skipped()) return;
+    if (this.room) this.room.bgScrolling = true;
 
-          // 1.5s later, start room moving
-          await new Promise((r) => setTimeout(r, 1500));
-          if (skipped()) return;
-          if (this.room) {
-            this.room.bgScrolling = true;
-          }
-
-          // Fade in questions one by one with 15s countdown
-          await new Promise((r) => setTimeout(r, 1000));
-          if (skipped()) return;
-          this.showQuestion(nextQ);
-        }, 1200);
-      }, 3200);
-    }, CUT_MS);
+    // Fade in questions one by one with 15s countdown
+    await new Promise((r) => setTimeout(r, 1000));
+    if (skipped()) return;
+    this.showQuestion(nextQ);
   }
 
   playSound(type) {

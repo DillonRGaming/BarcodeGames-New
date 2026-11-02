@@ -24,7 +24,10 @@ class SoundController {
       question: 'assets/sound/question.mp3',
       elevator: 'assets/sound/elevator.mp3',
       howdya_do: 'assets/sound/howdya_do.mp3',
-      organica: 'assets/sound/organica.mp3'
+      organica: 'assets/sound/organica.mp3',
+      // Killing room: volunteering, then the room itself (stand-ins until they get their own tracks)
+      killing_choose: 'assets/sound/piano.mp3',
+      killing_room: 'assets/sound/question.mp3'
     };
     this.currentTrack = 'lobby';
 
@@ -407,8 +410,40 @@ class SoundController {
     }
   }
 
-  playWhoosh() {
+  /** A quick typewriter key click, synthesised (scrambling text plays these) */
+  playTypeClick(volume = 0.12) {
+    const ctx = this.audioCtx;
+    if (!ctx || ctx.state !== 'running') return;
+    const len = Math.floor(ctx.sampleRate * 0.03);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 6);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 2200 + Math.random() * 1800;
+    band.Q.value = 1.4;
+    const gain = ctx.createGain();
+    gain.gain.value = volume * (0.7 + Math.random() * 0.6);
+    src.connect(band).connect(gain).connect(ctx.destination);
+    src.start();
+  }
+
+  /** The intro's scream, for a death */
+  playScream(volume = 0.9) {
+    const scream = new Audio('assets/sound/scream.mp3');
+    scream.volume = volume;
+    scream.play().catch(() => { });
+  }
+
+  /** `pitch` > 0 nudges the pitch up or down by up to that fraction, at random */
+  playWhoosh(pitch = 0) {
     const whoosh = new Audio('assets/sound/whoosh.mp3');
+    if (pitch) {
+      whoosh.preservesPitch = false;
+      whoosh.playbackRate = 1 + (Math.random() * 2 - 1) * pitch;
+    }
     whoosh.play().catch(() => { });
   }
 

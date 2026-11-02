@@ -199,6 +199,8 @@ class RoomManager {
 
   setBlackout(opacity) {
     if (this.blackout) {
+      // Cut to black instantly (a fade would show the next room switching in); fade back up
+      this.blackout.style.transition = opacity > 0 ? 'none' : '';
       this.blackout.style.opacity = `${opacity}`;
     }
     // The lobby's webs and gradient sit above the blackout layer, so they go dark with it

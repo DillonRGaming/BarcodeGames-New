@@ -11,8 +11,7 @@
  *   { type: 'countdown' }                     3, 2, 1 before the game (VIP sees Cancel)
  *   { type: 'intro' }                         intro playing (VIP sees Skip Intro)
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
- *   { type: 'sacrifice', reward }             10s to volunteer for the killing room (won if you survive, lost if you die)
- *   { type: 'plates', count }                 Room Service: pick a covered plate
+ *   { type: 'sacrifice', reward }             20s to volunteer for the killing room (won if you survive, lost if you die)
  *   { type: 'objects', options }              Baggage Claim: tap the items you saw ({ id, label, color })
  *
  * Messages to the host:
@@ -21,7 +20,6 @@
  *   { type: 'skip' }                          VIP pressed "Skip Intro"
  *   { type: 'answer', index }                 0-based answer the player picked
  *   { type: 'volunteer' }                     going into the killing room for the reward
- *   { type: 'plate', index }                  0-based plate picked in Room Service
  *   { type: 'objects', ids }                  current Baggage Claim selection (sent on every tap)
  */
 
@@ -165,26 +163,6 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     });
   }
 
-  function showPlates(count) {
-    body.innerHTML = '<div class="dtk-plates"></div>';
-    const grid = body.querySelector('.dtk-plates');
-    for (let index = 0; index < count; index++) {
-      const btn = document.createElement('button');
-      btn.className = 'dtk-plate';
-      btn.type = 'button';
-      btn.innerHTML = '<img src="games/dying-to-know/assets/cloche.svg" alt=""><span></span>';
-      btn.querySelector('span').textContent = index + 1;
-      btn.addEventListener('click', () => {
-        send({ type: 'plate', index });
-        grid.querySelectorAll('.dtk-plate').forEach((b) => {
-          b.disabled = true;
-          b.classList.toggle('picked', b === btn);
-        });
-      });
-      grid.appendChild(btn);
-    }
-  }
-
   onMessage((data) => {
     if (data.type === 'show') {
       const btn = answerButtons[data.index];
@@ -236,9 +214,6 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         break;
       case 'objects':
         showObjects(data.options || []);
-        break;
-      case 'plates':
-        showPlates(data.count || 4);
         break;
     }
     updateFooter();

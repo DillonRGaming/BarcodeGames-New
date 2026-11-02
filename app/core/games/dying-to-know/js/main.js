@@ -165,6 +165,7 @@ async function init() {
   const room = new RoomManager({ bgLayerEl, furnitureLayerEl, blackoutEl, lightingOverlayEl });
   const camera = new Camera({ containerEl: gridContainerEl, gridEl });
   const sound = new SoundController();
+  window.gameSound = sound; // scrambling text types with it
   const manager = new GameManager({ room, camera, sound, gridEl, players: [] });
 
   // 2. Decode every letter (alive + dead) up front so join-time texture baking is instant

@@ -9,10 +9,10 @@
  * Show `text` as X's (same length), then each character cycles through random letters and lands on
  * the real one, left to right; each starts before the one before it has landed.
  */
-function scrambleText(el, text, delay = 0) {
+function scrambleText(el, text, delay = 0, { spin = 1000, stagger = 230 } = {}) {
   const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const SPIN_MS = 1000;   // how long each character cycles
-  const STAGGER_MS = 230; // next character starts this long after the one before
+  const SPIN_MS = spin;       // how long each character cycles
+  const STAGGER_MS = stagger; // next character starts this long after the one before
   const STEP_MS = 65;     // how often a cycling character changes
   el.textContent = text.replace(/[^\s]/g, 'X');
 
@@ -32,9 +32,16 @@ function scrambleText(el, text, delay = 0) {
       return /[a-z]/.test(ch) ? c.toLowerCase() : c;
     });
     el.textContent = out.join('');
+    if (!done && window.gameSound && now >= start) window.gameSound.playTypeClick();
     if (!done) setTimeout(tick, STEP_MS);
   };
   setTimeout(tick, Math.max(0, delay));
+}
+
+/** On-screen text appearing: XXXX that decodes fast, done in about half a second whatever the length */
+function scrambleQuick(el, text, delay = 0) {
+  const len = Math.max(1, String(text).length);
+  scrambleText(el, String(text), delay, { spin: 200, stagger: Math.min(30, 320 / len) });
 }
 
 class Player {
@@ -502,6 +509,14 @@ class Player {
     this.currentScale = baseScale;
     this.wrapper.style.transition = 'none';
     this.wrapper.style.transform = (baseScale === 1.0) ? '' : `scale(${baseScale.toFixed(4)})`;
+  }
+
+  /** Back to normal from a right/wrong result, eased (the tick fading at the same time) */
+  settleResult(baseScale = 0.72) {
+    this.slot.style.opacity = '1.0';
+    this.currentScale = baseScale;
+    this.wrapper.style.transition = 'transform 0.45s ease, opacity 0.45s ease';
+    this.wrapper.style.transform = `scale(${baseScale.toFixed(4)})`;
   }
 
   /**

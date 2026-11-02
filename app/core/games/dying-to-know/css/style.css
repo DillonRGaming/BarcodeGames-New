@@ -113,7 +113,7 @@ body {
 
 .grid-container.lineup {
   align-items: flex-start;
-  padding-top: clamp(24px, 3.8vh, 44px);
+  padding-top: clamp(44px, 6.8vh, 80px);
 }
 
 .grid {
@@ -1501,124 +1501,42 @@ body {
   color: #ece6d8;
 }
 .killing-room.hidden { display: none; }
-.killing-room.flash::after { content: ""; position: absolute; inset: 0; background: rgba(255, 34, 0, 0.6); }
 
-/* Room Service: everything sized off the trolley width (--tw); the trolley art is 800 x 260 and
-   its tray top sits 220/260 of the way down */
-.kr-rs {
-  --tw: min(52vw, 90vh);
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: var(--tw);
-  height: calc(var(--tw) * 0.325);
-  transform: translateX(-50%);
-  transition: transform 1.8s cubic-bezier(0.2, 0.7, 0.3, 1);
+/* Death scene: the lobby wallpaper, recoloured to whoever is about to die */
+.death-room {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none; isolation: isolate;
+  background: url('../assets/images/rooms/lobby-small.jpg') center top / auto 100vh repeat-x;
 }
-.kr-rs.offstage { transform: translateX(calc(-50% - 100vw)); }
-.kr-rs-trolley { position: absolute; left: 0; bottom: calc(var(--tw) * 0.035); width: 100%; }
+/* hue only: the wallpaper keeps its own dark, muted tones */
+.death-room::after { content: ""; position: absolute; inset: 0; background: var(--c); mix-blend-mode: hue; }
+.death-room.hidden { display: none; }
 
-/* Wheels touch the bottom of the screen and turn as far as the trolley rolls */
-.kr-rs-wheel {
-  position: absolute;
-  bottom: 0;
-  width: calc(var(--tw) * 0.09);
-  transform: rotate(0deg);
-  transition: transform 1.8s cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-.kr-rs-wheel-back { left: calc(var(--tw) * 0.1); }
-.kr-rs-wheel-front { left: calc(var(--tw) * 0.81); }
-.kr-rs.offstage .kr-rs-wheel { transform: rotate(calc(-1 * var(--spin, 720deg))); }
-
-.kr-rs-plates {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: calc(var(--tw) * 0.035 + var(--tw) * 0.325 * 0.885);
-  height: calc(var(--tw) * 0.13);
-}
-.kr-rs-dish {
-  position: absolute;
-  bottom: 0;
-  width: calc(var(--tw) * 0.15);
-  height: calc(var(--tw) * 0.13);
-  transform: translateX(-50%);
-  transition-property: left;
-  transition-timing-function: ease-in-out;
-}
-.kr-rs-plate { position: absolute; left: 0; bottom: 0; width: 100%; }
-.kr-rs-bomb { position: absolute; left: 30%; bottom: calc(var(--tw) * 0.012); width: 40%; visibility: hidden; }
-.kr-rs-dish.lifted .kr-rs-bomb { visibility: visible; } /* only ever seen with the lid off */
-.kr-rs-cloche {
-  position: absolute;
-  left: 3%;
-  bottom: calc(var(--tw) * 0.01);
-  width: 94%;
-  transition: transform 0.45s cubic-bezier(.3, 1.5, .5, 1);
-}
-.kr-rs-dish.lifted .kr-rs-cloche { transform: translateY(calc(var(--tw) * -0.1)); }
-.kr-rs-dish.boom .kr-rs-bomb { animation: kr-boom 0.6s ease-out forwards; }
-@keyframes kr-boom {
-  0% { transform: scale(1); filter: none; }
-  40% { transform: scale(1.8); filter: brightness(3) sepia(1) hue-rotate(-30deg) saturate(8); }
-  100% { transform: scale(2.4); opacity: 0; }
-}
-
-/* Plate numbers on the tablecloth, guesses in a row above the plates */
-.kr-rs-numbers,
-.kr-rs-guesses {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  text-align: center;
-}
-.kr-rs-numbers { top: 18%; font-size: calc(var(--tw) * 0.035); color: #ece6d8; }
-.kr-rs-guesses {
-  bottom: calc(var(--tw) * (0.035 + 0.325 * 0.885 + 0.13 + 0.11));
-  align-items: end;
-}
-.kr-rs-guesses span { display: flex; justify-content: center; gap: 0.6vw; }
-
-/* A player's letter over the plate they picked */
-.kr-tag {
-  font-family: "Archivo", sans-serif;
-  font-weight: 900;
-  font-size: 3.4vh;
-  color: var(--tag-color, #ece6d8);
-  -webkit-text-stroke: 2px #000;
-  paint-order: stroke;
-}
 
 /* Baggage Claim: items glide across the room, then park in a row for the reveal */
 .kr-bc { position: absolute; inset: 0; }
-.kr-bc-lane { position: absolute; left: 0; right: 0; top: 70vh; height: 0; }
+.kr-bc-lane { position: absolute; left: 0; right: 0; top: 70vh; height: 0; --w: 11vw; }
 .kr-bc-item {
-  position: absolute; bottom: 0; left: 0; width: 11vw; display: grid; justify-items: center; gap: .8vh;
+  position: absolute; bottom: 0; left: 0; width: var(--w); display: grid; justify-items: center; gap: .8vh;
   transform: translateX(-16vw); transition-property: transform; transition-timing-function: linear;
 }
 .kr-bc-item.across { transform: translateX(112vw); }
-.kr-bc-item.parked { transform: translateX(calc(var(--stop) - 5.5vw)); transition-timing-function: cubic-bezier(.2,.8,.3,1); }
-.kr-bc-item.parked.gone { transform: translateX(112vw); transition-timing-function: cubic-bezier(.5,0,.8,.4); }
-.kr-bc-box { position: relative; width: 11vw; height: 11vw; display: grid; place-items: center; }
+.kr-bc-item.parked { transform: translateX(calc(var(--stop) - var(--w) / 2)); transition-timing-function: cubic-bezier(0,.55,.45,1); } /* ease-out: the leave run backwards */
+.kr-bc-item.parked.gone { transform: translateX(112vw); transition-timing-function: cubic-bezier(.55,0,1,.45); } /* ease-in: pulled away faster and faster */
+.kr-bc-box { position: relative; width: var(--w); height: var(--w); display: grid; place-items: center; }
 .kr-bc-box::before { content: ""; width: 9.5vw; height: 7vw; background: var(--c); border: .4vw solid #111; border-radius: .8vw; }
 .kr-bc-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; filter: drop-shadow(0 1vh 1vh rgba(0,0,0,.45)); }
 .kr-bc-item.has-art .kr-bc-box img { opacity: 1; }
 .kr-bc-item.has-art .kr-bc-box::before { display: none; }
-.kr-bc-item span { font-family: "Special Elite", monospace; font-size: 1.5vw; color: #ece6d8; white-space: nowrap; text-shadow: 0 .3vh .8vh #000; }
-.kr-bc-tags { display: flex; gap: .5vw; min-height: 3.6vh; }
+.kr-bc-item span { font-family: "Special Elite", monospace; font-size: calc(var(--w) * 0.13); color: #ece6d8; white-space: nowrap; text-shadow: 0 .3vh .8vh #000; }
 .kr-bc-prompt { position: absolute; left: 0; right: 0; top: 50vh; text-align: center; font-family: "Special Elite", monospace; font-size: 5vh; color: #ece6d8; text-shadow: 0 .4vh 1vh #000; }
 .kr-bc-prompt.hidden { display: none; }
+.kr-bc-count { position: absolute; left: 0; right: 0; top: calc(70vh - 7vw); transform: translateY(-50%); line-height: 1; text-align: center; font-family: "Special Elite", monospace; font-size: 18vh; color: #ece6d8; text-shadow: 0 .6vh 2vh #000; }
+@keyframes kr-count-pop { from { opacity: 0; transform: translateY(-50%) scale(.4); } }
+.kr-bc-count.pop { animation: kr-count-pop .35s cubic-bezier(.34,1.56,.64,1); }
 .kr-bc-score { position: absolute; transform: translate(-50%, 1vh); font-family: "Special Elite", monospace; font-size: 6vh; color: #ece6d8; text-shadow: 0 .4vh 1vh #000; animation: kr-bc-pop .35s cubic-bezier(.34,1.56,.64,1); }
+
+.kr-bc-score.lowest { color: #ff2200; transition: color .3s; }
 @keyframes kr-bc-pop { from { opacity: 0; transform: translate(-50%, 1vh) scale(.4); } }
-.kr-bc-wrong { position: absolute; left: 0; right: 0; bottom: 2vh; display: flex; justify-content: center; gap: 2vw; }
-.kr-bc-wrong .kr-bc-item { position: relative; transform: none; width: auto; }
-.kr-bc-wrong .kr-bc-box { width: 7vw; height: 7vw; opacity: .85; }
-.kr-bc-wrong .kr-bc-box::before { width: 6vw; height: 4.4vw; }
-.kr-bc-wrong .kr-bc-item span { font-size: 1.2vw; text-decoration: line-through; text-decoration-color: #ff2200; }
-.kr-tag.good { -webkit-text-stroke: 2px #000; }
-.kr-tag.bad { color: #ff2200; }
 
 /* Mod menu (backtick) */
 .mod-menu {
@@ -1670,3 +1588,10 @@ body {
 .mod-phone-resize {
   position: absolute; right: -9px; bottom: -9px; width: 26px; height: 26px; cursor: nwse-resize; touch-action: none; z-index: 3;
 }
+
+/* Room code, small in the bottom right for the whole game after the lobby */
+.game-room-code {
+  position: fixed; right: 3vw; bottom: 3.5vh; z-index: 50; pointer-events: none;
+  font-family: "Special Elite", monospace; font-size: 4.2vh; letter-spacing: .4vh; color: rgba(236, 230, 216, .75);
+}
+.game-room-code.hidden { display: none; }

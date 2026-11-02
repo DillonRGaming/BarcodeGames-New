@@ -270,36 +270,6 @@ body[data-game='dying-to-know'] {
   transform: translateY(0.15em);
 }
 
-/* Room Service: four covered plates, 2 x 2 */
-.dtk-plates {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
-  width: 100%;
-  max-width: 360px;
-  margin: 0 auto;
-}
-
-.dtk-plate {
-  appearance: none;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  padding: 10px;
-  border: 0;
-  background: none;
-  color: #ffffff;
-  font-family: 'Special Elite', 'Courier New', monospace;
-  font-size: 30px;
-  cursor: pointer;
-  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.dtk-plate img { width: 100%; }
-.dtk-plate:active { transform: scale(0.94); }
-.dtk-plate:disabled { opacity: 0.22; cursor: default; }
-.dtk-plate.picked { opacity: 1; transform: scale(1.08); }
-
 /* Killing room offer: styled like Skip Intro, centred where the answers sit, reward underneath */
 .dtk-sacrifice {
   appearance: none;
@@ -332,7 +302,7 @@ body[data-game='dying-to-know'] {
 /* Baggage Claim: real items scattered, faded like unpicked answers until tapped */
 .dtk-objects { position: relative; width: 100%; max-width: 420px; height: min(68vh, 560px); margin: 0 auto; }
 .dtk-object {
-  appearance: none; position: absolute; width: calc(24% * var(--size)); aspect-ratio: 1; padding: 0; border: 0; background: none;
+  appearance: none; position: absolute; width: calc(22% * var(--size)); aspect-ratio: 1; padding: 0; border: 0; background: none;
   transform: translate(-50%, -50%) rotate(var(--tilt)); opacity: 0.22; cursor: pointer;
   transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
