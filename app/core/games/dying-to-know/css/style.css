@@ -1600,6 +1600,7 @@ body {
 }
 .kr-bc-item.across { transform: translateX(112vw); }
 .kr-bc-item.parked { transform: translateX(calc(var(--stop) - 6.5vw)); transition-timing-function: cubic-bezier(.2,.8,.3,1); }
+.kr-bc-item.parked.gone { transform: translateX(112vw); transition-timing-function: cubic-bezier(.5,0,.8,.4); }
 .kr-bc-box { position: relative; width: 13vw; height: 13vw; display: grid; place-items: center; }
 .kr-bc-box::before { content: ""; width: 11vw; height: 8vw; background: var(--c); border: .4vw solid #111; border-radius: .8vw; }
 .kr-bc-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; filter: drop-shadow(0 1vh 1vh rgba(0,0,0,.45)); }
@@ -1609,6 +1610,8 @@ body {
 .kr-bc-tags { display: flex; gap: .5vw; min-height: 3.6vh; }
 .kr-bc-prompt { position: absolute; left: 0; right: 0; top: 50vh; text-align: center; font-family: "Special Elite", monospace; font-size: 5vh; color: #ece6d8; text-shadow: 0 .4vh 1vh #000; }
 .kr-bc-prompt.hidden { display: none; }
+.kr-bc-score { position: absolute; transform: translate(-50%, 1vh); font-family: "Special Elite", monospace; font-size: 6vh; color: #ece6d8; text-shadow: 0 .4vh 1vh #000; animation: kr-bc-pop .35s cubic-bezier(.34,1.56,.64,1); }
+@keyframes kr-bc-pop { from { opacity: 0; transform: translate(-50%, 1vh) scale(.4); } }
 .kr-bc-wrong { position: absolute; left: 0; right: 0; bottom: 2vh; display: flex; justify-content: center; gap: 2vw; }
 .kr-bc-wrong .kr-bc-item { position: relative; transform: none; width: auto; }
 .kr-bc-wrong .kr-bc-box { width: 7vw; height: 7vw; opacity: .85; }

@@ -11,9 +11,9 @@
  *   { type: 'countdown' }                     3, 2, 1 before the game (VIP sees Cancel)
  *   { type: 'intro' }                         intro playing (VIP sees Skip Intro)
  *   { type: 'wait', text? }                   between rounds (blank unless text is given)
- *   { type: 'sacrifice', reward }             10s to volunteer for the killing room (paid if you survive)
+ *   { type: 'sacrifice', reward }             10s to volunteer for the killing room (won if you survive, lost if you die)
  *   { type: 'plates', count }                 Room Service: pick a covered plate
- *   { type: 'objects', options }              Baggage Claim: tick the items you saw ({ id, label, color })
+ *   { type: 'objects', options }              Baggage Claim: tap the items you saw ({ id, label, color })
  *
  * Messages to the host:
  *   { type: 'start' }                         VIP pressed "Everybody's in"
@@ -22,7 +22,7 @@
  *   { type: 'answer', index }                 0-based answer the player picked
  *   { type: 'volunteer' }                     going into the killing room for the reward
  *   { type: 'plate', index }                  0-based plate picked in Room Service
- *   { type: 'objects', ids }                  items ticked in Baggage Claim
+ *   { type: 'objects', ids }                  current Baggage Claim selection (sent on every tap)
  */
 
 BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage }) => {
@@ -118,27 +118,33 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     });
   }
 
+  // Baggage Claim: the real items scattered loosely, faded until tapped. Every tap sends the
+  // current selection; whatever is selected when the timer ends counts.
   function showObjects(options) {
-    body.innerHTML = '<div class="dtk-objects"></div><button class="dtk-done" type="button">Done</button>';
-    const grid = body.querySelector('.dtk-objects');
+    body.innerHTML = '<div class="dtk-objects"></div>';
+    const field = body.querySelector('.dtk-objects');
     const picked = new Set();
-    options.forEach((it) => {
+    const cols = 3;
+    const rows = Math.ceil(options.length / cols) + 1; // spare cells so the gaps land anywhere
+    const cells = Array.from({ length: cols * rows }, (_, i) => i).sort(() => Math.random() - 0.5).slice(0, options.length);
+    options.forEach((it, i) => {
       const btn = document.createElement('button');
       btn.className = 'dtk-object';
       btn.type = 'button';
-      btn.innerHTML = '<i></i><span></span>';
-      btn.querySelector('i').style.background = it.color;
-      btn.querySelector('span').textContent = it.label;
+      const col = cells[i] % cols;
+      const row = Math.floor(cells[i] / cols);
+      btn.style.left = `${((col + 0.5 + (Math.random() - 0.5) * 0.45) / cols) * 100}%`;
+      btn.style.top = `${((row + 0.5 + (Math.random() - 0.5) * 0.4) / rows) * 100}%`;
+      btn.style.setProperty('--size', `${(0.85 + Math.random() * 0.3).toFixed(2)}`);
+      btn.style.setProperty('--tilt', `${((Math.random() - 0.5) * 24).toFixed(1)}deg`);
+      btn.innerHTML = '<img alt="">';
+      btn.querySelector('img').src = `games/dying-to-know/assets/baggage-claim/${it.id}.webp`;
       btn.addEventListener('click', () => {
         if (picked.has(it.id)) picked.delete(it.id); else picked.add(it.id);
         btn.classList.toggle('picked', picked.has(it.id));
+        send({ type: 'objects', ids: [...picked] });
       });
-      grid.appendChild(btn);
-    });
-    const done = body.querySelector('.dtk-done');
-    done.addEventListener('click', () => {
-      send({ type: 'objects', ids: [...picked] });
-      body.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      field.appendChild(btn);
     });
   }
 
