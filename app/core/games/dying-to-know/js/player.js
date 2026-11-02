@@ -354,6 +354,7 @@ class Player {
   startDeathSpin() {
     this.isFlipping = true;
     this.state = 'DYING';
+    if (this.onLifeChange) this.onLifeChange();
     this.spinType = 'DEATH';
     this.spinDuration = 1.5;
     this.spinTimer = 0;
@@ -391,6 +392,7 @@ class Player {
   startReviveSpin() {
     this.isFlipping = true;
     this.state = 'REVIVING';
+    if (this.onLifeChange) this.onLifeChange();
     this.spinType = 'REVIVE';
     this.spinDuration = 1.5; // same as the death spin
     this.spinTimer = 0;

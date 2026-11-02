@@ -153,6 +153,7 @@ class GameManager {
       isVip: !!info.id && !this.players.some((p) => p.isVip), // only a real phone player can be VIP; bots never are
     });
     player.colorIndex = colorIndex;
+    player.onLifeChange = () => { if (player.roomId) this.sendProfile(player.roomId, player); }; // phone bar goes dead-coloured
     if (DEV_RANDOM_MONEY) player.money = Math.round(Math.random() * 40) * 50; // £0–£2000
     if (info.id) {
       player.roomId = info.id;
@@ -228,6 +229,8 @@ class GameManager {
       color: player.nameColor,
       letter: player.letter,
       vip: player.isVip,
+      dead: player.state === 'DYING' || player.state === 'DEAD',
+      killingRoom: !!(this.killingRoom && this.killingRoom.players && this.killingRoom.players.includes(player)),
     });
   }
 

@@ -75,9 +75,25 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     startBtn.disabled = true;
   });
 
+  // Status words (Correct, Volunteered…) only flash up briefly, then fade
   function showMessage(title = '') {
     body.innerHTML = '<h2 class="dtk-title"></h2>';
-    body.querySelector('.dtk-title').textContent = title;
+    const el = body.querySelector('.dtk-title');
+    el.textContent = title;
+    if (title) setTimeout(() => el.classList.add('gone'), 1600);
+  }
+
+  // The colour of a player's dead letter: CSS saturate(0.45) brightness(1.05), as baked in the game
+  function deadColor(hex) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const s = 0.45;
+    const m = [
+      [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s],
+      [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s],
+      [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s],
+    ];
+    const c = m.map((row) => Math.min(255, Math.round((row[0] * r + row[1] * g + row[2] * b) * 1.05)));
+    return `rgb(${c.join(', ')})`;
   }
 
   // Same look as the answers on the TV: torn number tile + typewriter text, stacked and centred
@@ -125,7 +141,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
     const field = body.querySelector('.dtk-objects');
     const picked = new Set();
     const cols = 3;
-    const rows = Math.ceil(options.length / cols) + 1; // spare cells so the gaps land anywhere
+    const rows = Math.ceil((options.length + 1) / cols); // a spare cell or two so the gaps land anywhere
     const cells = Array.from({ length: cols * rows }, (_, i) => i).sort(() => Math.random() - 0.5).slice(0, options.length);
     options.forEach((it, i) => {
       const btn = document.createElement('button');
@@ -133,10 +149,11 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
       btn.type = 'button';
       const col = cells[i] % cols;
       const row = Math.floor(cells[i] / cols);
-      btn.style.left = `${((col + 0.5 + (Math.random() - 0.5) * 0.45) / cols) * 100}%`;
-      btn.style.top = `${((row + 0.5 + (Math.random() - 0.5) * 0.4) / rows) * 100}%`;
-      btn.style.setProperty('--size', `${(0.85 + Math.random() * 0.3).toFixed(2)}`);
-      btn.style.setProperty('--tilt', `${((Math.random() - 0.5) * 24).toFixed(1)}deg`);
+      // a loose grid: small nudges inside each cell, kept off the edges
+      btn.style.left = `${10 + ((col + 0.5 + (Math.random() - 0.5) * 0.25) / cols) * 80}%`;
+      btn.style.top = `${6 + ((row + 0.5 + (Math.random() - 0.5) * 0.2) / rows) * 88}%`;
+      btn.style.setProperty('--size', `${(0.92 + Math.random() * 0.16).toFixed(2)}`);
+      btn.style.setProperty('--tilt', `${((Math.random() - 0.5) * 12).toFixed(1)}deg`);
       btn.innerHTML = '<img alt="">';
       btn.querySelector('img').src = `games/dying-to-know/assets/baggage-claim/${it.id}.webp`;
       btn.addEventListener('click', () => {
@@ -180,7 +197,8 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
       return;
     }
     if (data.type === 'profile') {
-      header.style.setProperty('--player-color', data.color);
+      header.style.setProperty('--player-color', data.dead ? deadColor(data.color) : data.color);
+      root.querySelector('.dtk').classList.toggle('in-killing-room', !!data.killingRoom);
       header.classList.add('has-color');
       isVip = !!data.vip;
       vipTags.forEach((tag) => tag.classList.toggle('hidden', !isVip));

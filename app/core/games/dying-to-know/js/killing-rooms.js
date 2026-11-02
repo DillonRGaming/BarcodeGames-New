@@ -138,6 +138,7 @@ class KillingRoomDirector {
     // 3. Room change into the killing room, same beats as runRoomTransitionLoop
     const players = [taken, ...this.volunteers.map((v) => v.player)];
     this.players = players;
+    players.forEach((p) => { if (p.roomId) m.sendProfile(p.roomId, p); }); // their phones switch to the killing room
     m.players.forEach((p) => { if (p.isAlive()) p.blendWiggle(0, 1.0); });
     setTimeout(() => { if (m.sound) m.sound.playBuild(); }, 300);
     await wait(2400);
@@ -203,6 +204,7 @@ class KillingRoomDirector {
   /** Called in the dark of the next room change: back to the hotel, everyone in the grid */
   leave() {
     const m = this.manager;
+    (this.players || []).forEach((p) => { if (p.roomId) m.net.sendTo(p.roomId, { type: 'profile', color: p.nameColor, letter: p.letter, vip: p.isVip, dead: !p.isAlive() && p.state !== 'REVIVING', killingRoom: false }); });
     this.scene.classList.add('hidden');
     this.scene.innerHTML = '';
     this.scene.style.backgroundImage = '';
@@ -477,6 +479,7 @@ class BaggageClaim {
   static PICK_SECONDS = 15;
   static RIDE_MS = 5200;   // one case crossing the screen
   static SPACING_MS = 1150; // gap between items crossing
+  static PARK_GAP_VW = 15;   // centre to centre once they're back
 
   constructor(manager, scene) {
     this.manager = manager;
@@ -574,7 +577,7 @@ class BaggageClaim {
     for (let i = n - 1; i >= 0; i--) {
       const el = this.item(this.shown[i], 'riding');
       el.style.transitionDuration = '900ms';
-      el.style.setProperty('--stop', `${((i + 0.5) / n) * 76 + 12}vw`);
+      el.style.setProperty('--stop', `${50 + (i - (n - 1) / 2) * BaggageClaim.PARK_GAP_VW}vw`);
       this.lane.appendChild(el);
       void el.offsetWidth;
       el.classList.add('parked');
@@ -609,12 +612,7 @@ class BaggageClaim {
     if (players.length === 1) losers = scores[0] < n - 1 ? [...players] : [];
     else if (scores.every((v) => v === n)) losers = [];
     else losers = players.filter((p, i) => scores[i] === worst);
-    if (losers.length) {
-      this.scene.classList.add('flash');
-      if (m.sound) m.sound.playSlam(1.0);
-      await wait(400);
-      this.scene.classList.remove('flash');
-    }
+    if (losers.length && m.sound) m.sound.playSlam(1.0);
     for (const p of losers) {
       p.startDeathSpin();
       await wait(450);
