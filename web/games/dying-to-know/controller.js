@@ -125,7 +125,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
   function showSacrifice(reward) {
     body.innerHTML = '<button class="dtk-sacrifice" type="button"><span class="dtk-sacrifice-label">Volunteer</span><span class="dtk-sacrifice-reward"></span></button>';
     const btn = body.querySelector('.dtk-sacrifice');
-    btn.querySelector('.dtk-sacrifice-reward').textContent = `£${reward}`;
+    btn.querySelector('.dtk-sacrifice-reward').textContent = `$${reward}`;
     btn.addEventListener('click', () => {
       send({ type: 'volunteer' });
       btn.disabled = true;
@@ -209,7 +209,7 @@ BarcodeJoin.registerController('dying-to-know', ({ root, player, send, onMessage
         break;
       case 'sacrifice':
         // The reward drops as others volunteer: update the amount without resetting a pressed button
-        if (body.querySelector('.dtk-sacrifice')) body.querySelector('.dtk-sacrifice-reward').textContent = `£${data.reward}`;
+        if (body.querySelector('.dtk-sacrifice')) body.querySelector('.dtk-sacrifice-reward').textContent = `$${data.reward}`;
         else showSacrifice(data.reward);
         break;
       case 'objects':

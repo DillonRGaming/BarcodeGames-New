@@ -167,6 +167,7 @@ async function init() {
   const sound = new SoundController();
   window.gameSound = sound; // scrambling text types with it
   const manager = new GameManager({ room, camera, sound, gridEl, players: [] });
+  window.gameManager = manager; // dev: poke at the game from the console
 
   // 2. Decode every letter (alive + dead) up front so join-time texture baking is instant
   const decodes = [];

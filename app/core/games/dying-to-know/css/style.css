@@ -211,7 +211,7 @@ body {
   opacity: 0.92;
 }
 
-/* The chalk stalk, notched every £100 (--groove); it stays still while clip-path reveals it */
+/* The chalk stalk, notched every $100 (--groove); it stays still while clip-path reveals it */
 .money-bar {
   position: absolute;
   bottom: 0;
@@ -987,7 +987,8 @@ body {
 /* 2. Answers List (Right Wall Perspective & X-Axis Offsets) */
 .answers-list {
   position: absolute;
-  right: clamp(14%, 22vw, 30%);
+  left: 52vw; /* starts just right of the question; long answers wrap instead of pushing back into it */
+  max-width: 36vw;
   top: clamp(34%, 38vh, 44%);
   display: flex;
   flex-direction: column;
@@ -1086,8 +1087,8 @@ body {
   font-size: clamp(22px, 2.4vw, 38px);
   font-weight: 700;
   color: #ffffff;
-  white-space: nowrap;
   letter-spacing: 0.3px;
+  line-height: 1.15;
 }
 
 /* 3. Countdown Timer: flat 2D flip clock */
@@ -1502,6 +1503,11 @@ body {
 }
 .killing-room.hidden { display: none; }
 
+/* A gore death playing over the death scene (rip-test.html embedded): above the room and the blackout,
+   under the players; it shows once it starts, drawn over the hidden letter exactly */
+.gore-frame { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 9; pointer-events: none; opacity: 0; background: transparent; }
+.gore-frame.on { opacity: 1; }
+
 /* Death scene: the lobby wallpaper, recoloured to whoever is about to die */
 .death-room {
   position: fixed; inset: 0; z-index: 4; pointer-events: none; isolation: isolate;
@@ -1595,3 +1601,11 @@ body {
   font-family: "Special Elite", monospace; font-size: 4.2vh; letter-spacing: .4vh; color: rgba(236, 230, 216, .75);
 }
 .game-room-code.hidden { display: none; }
+
+/* Money under each player's head while volunteers are wanted */
+.kr-bank {
+  position: fixed; z-index: 20; transform: translate(-50%, 0.6vh); pointer-events: none;
+  font-family: "Special Elite", monospace; font-size: 3.4vh; color: #ece6d8; text-shadow: 0 .3vh .8vh #000;
+  animation: kr-bc-pop .35s cubic-bezier(.34,1.56,.64,1); transition: opacity .35s;
+}
+.kr-bank.gone { opacity: 0; }

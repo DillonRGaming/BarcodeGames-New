@@ -17,10 +17,12 @@ const wait = (ms) => new Promise((resolve, reject) => {
 });
 const ROOM_ART = 'assets/images/killing';
 const SACRIFICE_SECONDS = 20;
-const SACRIFICE_REWARDS = [300, 200, 150, 100, 50]; // then £50 for everyone after
+const SACRIFICE_REWARDS = [300, 200, 150, 100, 50]; // then $50 for everyone after
 const TAKEN_SCALE = 1.3;
 const VOLUNTEER_SCALE = 0.8;
 const MAX_VOLUNTEERS = 2; // the room holds the taken player plus two
+// Spoken names of the player colours, in palette.js order (bone white is just "white")
+const TAKEN_COLOUR_NAMES = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'pink', 'teal', 'brown', 'white'];
 
 /** Dev settings live on the manager (see the dev panel); timers shrink in fast mode */
 const devOf = (m) => m.dev || {};
@@ -44,6 +46,33 @@ async function takePlacesRow(manager, players) {
   const targets = new Map(players.map((p, i) => [p, { x: w / 2 + (i - (players.length - 1) / 2) * gap, y: h * 0.3, k: 0.8 }]));
   await manager.placeForKilling(targets, 850, new Set(), 90);
   await wait(1500);
+}
+
+const GORE_DEATHS = ['rip', 'chop', 'balloon'];
+
+/**
+ * A gore death (rip-test.html, embedded): the page covers the screen, drawn over the player's letter at
+ * exactly its size and place, with the death room behind. Resolves `ready` once loaded and `done` when
+ * it's time for the ghost; `go()` starts it, `remove()` takes it away.
+ */
+function loadGore(player, kind) {
+  const r = player.frontImg.getBoundingClientRect();
+  const frame = document.createElement('iframe');
+  frame.className = 'gore-frame';
+  frame.src = `rip-test.html?embed=${kind}&letter=${encodeURIComponent(player.letter)}&col=${encodeURIComponent(player.nameColor)}`
+    + `&x=${(r.left + r.right) / 2}&top=${r.top}&h=${r.height}`;
+  document.body.appendChild(frame);
+  const heard = (what) => new Promise((resolve) => {
+    const on = (e) => { if (e.source === frame.contentWindow && e.data && e.data.gore === what) { window.removeEventListener('message', on); resolve(); } };
+    window.addEventListener('message', on);
+  });
+  const ready = Promise.race([heard('ready'), wait(6000)]); // never hold the game up if it fails to load
+  return {
+    ready,
+    done: heard('done'),
+    go() { frame.classList.add('on'); frame.contentWindow.postMessage({ gore: 'go' }, '*'); },
+    remove() { frame.remove(); },
+  };
 }
 
 /**
@@ -71,19 +100,29 @@ async function deathScene(manager, losers) {
         room.classList.remove('hidden');
         m.players.forEach((p) => p.slot.classList.toggle('kr-away', p !== loser));
         m.placeForKilling(new Map([[loser, { x: window.innerWidth / 2, y: window.innerHeight * 0.55, k: 3.2 }]]), 0);
-        loser.wrapper.style.transform = `scale(3.2) rotate(${Math.random() < 0.5 ? -8 : 8}deg)`;
+        loser.wrapper.style.transform = 'scale(3.2)'; // upright, so the gore lines up with it exactly
       },
     });
+    // Loaded during the beat, once the letter has settled where it'll die
+    const gore = loadGore(loser, GORE_DEATHS[Math.random() * GORE_DEATHS.length | 0]);
     await wait(1500); // the host's goodbye line will play here
+    await gore.ready;
 
-    loser.startDeathSpin();
-    if (m.sound) m.sound.playScream();
-    await wait(2600);
+    // It dies (the page draws it from here, so the real letter hides), then its ghost glows in where it was
+    gore.go();
+    loser.slot.style.visibility = 'hidden';
+    loser.joinDead();
+    if (loser.onLifeChange) loser.onLifeChange();
+    await Promise.race([gore.done, wait(12000)]);
+    loser.slot.style.visibility = '';
+    loser.spawnGlow();
+    await wait(2200);
 
     // Room change back to the killing room, everything as it was, minus them
     await m.roomChange({
       switchBg: false,
       onDark: () => {
+        gore.remove();
         m.placeForKilling(before, 0);
         m.players.forEach((p) => p.slot.classList.toggle('kr-away', before.get(p).away));
         room.classList.add('hidden');
@@ -103,7 +142,9 @@ class KillingRoomDirector {
     this.scene = document.getElementById('killingRoom');
     this.clockEl = document.getElementById('killTimer');
     this.clock = killClock();
-    this.volunteers = []; // [{ player, reward }] in the order they volunteered
+    this.volunteers = []; // [{ player, reward }] in the line, in the order they volunteered
+    this.claimed = [];    // everyone who pressed Volunteer, including any still waiting to be brought in
+    this.admitting = Promise.resolve(); // volunteers are brought in one at a time
     this.room = null;
   }
 
@@ -140,26 +181,39 @@ class KillingRoomDirector {
     this.taken = taken;
     const candidates = m.players.filter((p) => p !== taken && p.isAlive());
 
-    // 1. The taken player flies to the middle, bigger (results stay up for everyone else)
-    taken.slot.style.opacity = '1';
+    // 1. The host calls out the slowest by colour ("Too slow, Yellow!", one of three lines),
+    //    and once he's said it they fly to the middle, bigger (results stay up for everyone else)
     m.setPhoneState({ type: 'wait' });
     if (taken.roomId) m.net.sendTo(taken.roomId, { type: 'wait', text: 'Taken' });
+    const colour = TAKEN_COLOUR_NAMES[taken.colorIndex];
+    if (colour && m.sound) {
+      const line = ['last', 'ooh', 'mine'][Math.floor(Math.random() * 3)];
+      await m.sound.playVoiceline(`assets/sound/voice/taken/${line}-${colour}.mp3`);
+      await wait(300);
+    }
+    taken.slot.style.opacity = '1';
+    taken.slot.style.zIndex = '30'; // in front of everyone still in the line-up
     m.placeForKilling(this.offerLayout());
     await wait(1100);
 
     // 2. Twenty seconds for anyone else to volunteer (dev can skip this or make every bot volunteer)
+    //    The host's offer comes first; the clock and the phones' buttons start once he's said it
     const offerSeconds = devOf(m).skipOffer ? 0 : secs(m, SACRIFICE_SECONDS);
-    this.offerOpen = offerSeconds > 0;
-    if (this.offerOpen) {
+    if (offerSeconds > 0) {
+      this.clock.set(offerSeconds, false);
+      this.clockEl.classList.remove('hidden', 'urgent');
+      if (m.sound) {
+        m.sound.playTrack('killing_choose', 1200);
+        await m.sound.playVoiceline(`assets/sound/voice/killing-volunteer-${1 + Math.floor(Math.random() * 6)}.mp3`); // "I'll give two people the chance to join them... for money"
+        await wait(300);
+      }
+      this.offerOpen = true;
+      this.showBanks(candidates);
       candidates.forEach((p, i) => {
         if (p.roomId) m.net.sendTo(p.roomId, { type: 'sacrifice', reward: this.rewardFor(0) });
         else if (devOf(m).fillRoom) setTimeout(() => this.volunteer(p), 500 + i * 450);
         else if (Math.random() < 0.3) setTimeout(() => this.volunteer(p), 1200 + Math.random() * (offerSeconds - 2) * 1000);
       });
-      this.clock.set(offerSeconds, false);
-      this.clockEl.classList.remove('hidden', 'urgent');
-      if (m.sound) m.sound.playTrack('killing_choose', 1200);
-      if (m.sound) m.sound.playVoiceline('assets/sound/voice/killing-volunteer.mp3'); // "I'll give two people the chance to join them for money"
       if (m.sound) m.sound.playTick(0.85);
     }
     for (let s = offerSeconds - 1; s >= 0 && !this.offerFull(candidates); s--) {
@@ -168,14 +222,25 @@ class KillingRoomDirector {
       this.clock.set(s);
       this.clockEl.classList.toggle('urgent', s <= 5);
       if (s > 0 && m.sound) m.sound.playTick(0.85);
+      // One volunteer, one place left and under 8 seconds: "There's still one spot left..."
+      if (s === 7 && this.claimed.length === 1 && candidates.length > 1 && m.sound) {
+        await this.admitting;
+        await m.sound.playVoiceline(`assets/sound/voice/killing-spot-left-${1 + Math.floor(Math.random() * 3)}.mp3`);
+      }
+      // Halfway and still nobody: "Any takers?" (the clock waits for him)
+      if (s === Math.floor(offerSeconds / 2) && candidates.length && !this.claimed.length && m.sound) {
+        await m.sound.playVoiceline(`assets/sound/voice/killing-any-takers-${1 + Math.floor(Math.random() * 2)}.mp3`);
+      }
     }
     this.offerOpen = false;
+    await this.admitting; // anyone still being welcomed in finishes first
+    this.hideBank();
     candidates.forEach((p) => {
       if (p.roomId) m.net.sendTo(p.roomId, { type: 'wait', text: this.volunteers.some((v) => v.player === p) ? 'Volunteered' : '' });
     });
     if (offerSeconds > 0 && candidates.length && !this.volunteers.length && m.sound) {
       // Nobody joined: "Guess not." on 0, then a second after he finishes
-      await m.sound.playVoiceline('assets/sound/voice/killing-guess-not.mp3');
+      await m.sound.playVoiceline(`assets/sound/voice/killing-guess-not-${1 + Math.floor(Math.random() * 2)}.mp3`);
       await wait(1000);
     } else {
       await wait(1200); // a beat on 0
@@ -221,7 +286,7 @@ class KillingRoomDirector {
     players.forEach((p) => {
       if (!p.roomId) return;
       const v = this.volunteers.find((x) => x.player === p);
-      m.net.sendTo(p.roomId, { type: 'wait', text: losers.includes(p) ? 'Dead' : v ? `+£${v.reward}` : 'Survived' });
+      m.net.sendTo(p.roomId, { type: 'wait', text: losers.includes(p) ? 'Dead' : v ? `+$${v.reward}` : 'Survived' });
     });
     await wait(1500);
     activeDirector = null;
@@ -232,6 +297,7 @@ class KillingRoomDirector {
   abort() {
     this.aborted = true;
     this.offerOpen = false;
+    this.hideBank();
     if (this.room) this.room.picking = false;
     this.clockEl.classList.add('hidden');
   }
@@ -254,24 +320,75 @@ class KillingRoomDirector {
     m.camera.setGridMode('grid');
     m.players.forEach((p) => {
       p.slot.classList.remove('kr-away');
+      p.slot.style.zIndex = '';
       p.moneyEl.classList.remove('visible');
       p.cancelFlight();
       p.clearResult(1.0);
     });
   }
 
-  /** Nobody else can join: two volunteers, or everyone who could has */
-  offerFull(candidates) {
-    return this.volunteers.length >= Math.min(MAX_VOLUNTEERS, candidates.length);
+  /** While volunteers are wanted, everyone who could join shows their money under their head */
+  showBanks(candidates) {
+    this.banks = new Map();
+    candidates.forEach((p) => {
+      const r = p.slot.getBoundingClientRect();
+      const el = document.createElement('div');
+      el.className = 'kr-bank';
+      el.textContent = `${p.money < 0 ? '-' : ''}$${Math.abs(Math.round(p.money))}`;
+      el.style.left = `${r.left + r.width / 2}px`;
+      el.style.top = `${r.bottom}px`;
+      document.body.appendChild(el);
+      this.banks.set(p, el);
+    });
   }
 
+  /** Hide one player's money (they volunteered), or everyone's */
+  hideBank(player = null) {
+    if (!this.banks) return;
+    const els = player ? [this.banks.get(player)] : [...this.banks.values()];
+    els.forEach((el) => {
+      if (!el) return;
+      el.classList.add('gone');
+      setTimeout(() => el.remove(), 400);
+    });
+    if (player) this.banks.delete(player);
+    else this.banks.clear();
+  }
+
+  /** Nobody else can join: two volunteers, or everyone who could has */
+  offerFull(candidates) {
+    return this.claimed.length >= Math.min(MAX_VOLUNTEERS, candidates.length);
+  }
+
+  /**
+   * A player pressed Volunteer. Their place (and reward) is claimed straight away, but they're
+   * brought in one at a time: each joins the line as the host welcomes them, and the next waits
+   * until he's finished.
+   */
   volunteer(player) {
-    if (!this.offerOpen || this.volunteers.length >= MAX_VOLUNTEERS) return;
-    if (this.volunteers.some((v) => v.player === player) || !player.isAlive()) return;
-    player.slot.style.opacity = '1';
-    const reward = this.rewardFor(this.volunteers.length);
-    this.volunteers.push({ player, reward });
+    if (!this.offerOpen || this.claimed.length >= MAX_VOLUNTEERS) return;
+    if (this.claimed.includes(player) || !player.isAlive()) return;
+    const reward = this.rewardFor(this.claimed.length);
+    this.claimed.push(player);
+    this.admitting = this.admitting.then(() => this.admit(player, reward));
+    // Everyone still deciding sees the reward drop, or loses the button once the room is full
     const m = this.manager;
+    const full = this.claimed.length >= MAX_VOLUNTEERS;
+    m.players.forEach((c) => {
+      if (c.roomId && c !== this.taken && c.isAlive() && !this.claimed.includes(c)) {
+        m.net.sendTo(c.roomId, full ? { type: 'wait' } : { type: 'sacrifice', reward: this.rewardFor(this.claimed.length) });
+      }
+    });
+  }
+
+  /** Bring a volunteer into the line and have the host welcome them by colour */
+  async admit(player, reward) {
+    if (this.aborted) return;
+    const m = this.manager;
+    this.hideBank(player);
+    player.slot.style.opacity = '1';
+    player.slot.style.zIndex = '30';
+    this.volunteers.push({ player, reward });
     player.setMoneyText(reward);
     player.setMoneyBar(0);
     player.moneyEl.classList.remove('down');
@@ -279,13 +396,13 @@ class KillingRoomDirector {
     // Only the new volunteer flies in; anyone already in the row slides over
     m.placeForKilling(this.offerLayout(), 850, new Set([this.taken, ...this.volunteers.slice(0, -1).map((v) => v.player)]));
     if (m.sound) m.sound.playLight();
-    // Everyone still deciding sees the reward drop, or loses the button once the room is full
-    const full = this.volunteers.length >= MAX_VOLUNTEERS;
-    m.players.forEach((c) => {
-      if (c.roomId && c !== this.taken && c.isAlive() && !this.volunteers.some((v) => v.player === c)) {
-        m.net.sendTo(c.roomId, full ? { type: 'wait' } : { type: 'sacrifice', reward: this.rewardFor(this.volunteers.length) });
-      }
-    });
+    // First or second volunteer, one of two lines each
+    const colour = TAKEN_COLOUR_NAMES[player.colorIndex];
+    if (colour && m.sound) {
+      const slot = this.volunteers.length === 1 ? 'first' : 'second';
+      await m.sound.playVoiceline(`assets/sound/voice/volunteered/${slot}-${1 + Math.floor(Math.random() * 2)}-${colour}.mp3`);
+      await new Promise((r) => setTimeout(r, 300));
+    }
   }
 
   onMessage(player, data) {
@@ -295,8 +412,8 @@ class KillingRoomDirector {
 }
 
 /**
- * Baggage Claim: after 3, 2, 1, 5 to 7 items glide across the screen, left to right. Then everyone
- * picks, from 12 on their phone, the ones they saw. The real items come back one by one from the right,
+ * Baggage Claim: after 3, 2, 1, 6 to 8 items glide across the screen, left to right. Then everyone
+ * picks, from 14 on their phone, the ones they saw. The real items come back one by one from the right,
  * then everyone's score (right picks minus wrong picks) shows under them and the lowest dies
  * (two tied at the bottom both die, three or more tied all live; nobody dies if everyone was perfect).
  *
@@ -344,7 +461,7 @@ const BAGGAGE_ITEMS = [
 class BaggageClaim {
   static id = 'baggage-claim';
   static title = 'Baggage Claim';
-  static OPTIONS = 12; // on the phone: the 5-7 shown plus the rest that weren't
+  static OPTIONS = 14; // on the phone: the 6-8 shown plus the rest that weren't
   static PICK_SECONDS = 15;
   static RIDE_MS = 5200;   // one case crossing the screen
   static SPACING_MS = 1150; // gap between items crossing
@@ -361,7 +478,7 @@ class BaggageClaim {
   build(players) {
     this.players = players;
     const options = shuffled(BAGGAGE_ITEMS).slice(0, BaggageClaim.OPTIONS);
-    this.shown = options.slice(0, 5 + Math.floor(Math.random() * 3)); // 5 to 7
+    this.shown = options.slice(0, 6 + Math.floor(Math.random() * 3)); // 6 to 8
     this.options = shuffled(options); // phone order gives nothing away
     this.scene.style.backgroundImage = `url('${ROOM_ART}/baggage-claim/background.png')`;
     this.scene.innerHTML = `
@@ -394,7 +511,14 @@ class BaggageClaim {
     const clockEl = document.getElementById('killTimer');
     const clock = killClock();
 
-    // 1. 3, 2, 1, then the items glide across one after another, left to right
+    // The host's lines for this room: one of `takes` at random; resolves when he's finished
+    const say = (line, takes = 2) => (m.sound
+      ? m.sound.playVoiceline(`assets/sound/voice/baggage-${line}-${1 + Math.floor(Math.random() * takes)}.mp3`)
+      : Promise.resolve());
+
+    // 1. "Watch the luggage...", 3, 2, 1, then the items glide across one after another, left to right
+    await say('watch');
+    await wait(400);
     const count = this.scene.querySelector('.kr-bc-count');
     for (const k of [3, 2, 1]) {
       count.textContent = k;
@@ -414,7 +538,7 @@ class BaggageClaim {
         this.lane.appendChild(el);
         void el.offsetWidth;
         el.classList.add('across');
-        if (m.sound) m.sound.playWhoosh();
+        if (m.sound) m.sound.playSwish(0.5);
       }, i * BaggageClaim.SPACING_MS);
     });
     await wait((this.shown.length - 1) * BaggageClaim.SPACING_MS + BaggageClaim.RIDE_MS + 300);
@@ -425,6 +549,7 @@ class BaggageClaim {
     prompt.classList.remove('hidden');
     scrambleQuick(prompt, 'What objects did you see?');
     if (m.sound) m.sound.playSlam(0.7);
+    await say('which'); // "What objects did you see?", then the phones and the clock
     this.picks = new Map();
     this.picking = true;
     const shownIds = new Set(this.shown.map((it) => it.id));
@@ -456,11 +581,15 @@ class BaggageClaim {
     clockEl.classList.add('hidden');
     prompt.classList.add('hidden');
 
+    // "Let's see..." / "Let's have a look...", then the real items come back
+    await say('lookback', 4);
+
     // 3. The real items come back the way they'll leave, mirrored: rightmost first, each sliding
     //    in and slowing to a stop, the next setting off sooner each time
     const n = this.shown.length;
     const gap = Math.min(BaggageClaim.PARK_GAP_VW, 88 / n);
     this.lane.style.setProperty('--w', `${Math.min(11, gap * 0.9).toFixed(2)}vw`);
+    let joked = false;
     for (let k = 0, i = n - 1; i >= 0; k++, i--) {
       const el = this.item(this.shown[i], 'riding');
       el.style.transitionDuration = `${BaggageClaim.SLIDE_MS}ms`;
@@ -468,10 +597,21 @@ class BaggageClaim {
       this.lane.appendChild(el);
       void el.offsetWidth;
       el.classList.add('parked');
-      if (m.sound) m.sound.playWhoosh(0.12);
-      await wait(BaggageClaim.slideGap(k));
+      if (m.sound) m.sound.playSwish(0.5);
+      // The host names each one as it arrives ("A teddy bear."). Now and then (once at most) he
+      // says something about it instead ("A teddy bear. Its eyes follow you..."). The next waits.
+      const detail = !joked && Math.random() < 0.25;
+      if (detail) joked = true;
+      const line = `assets/sound/voice/${detail ? 'items' : 'item-names'}/${this.shown[i].id}.mp3`;
+      // The last one gets an "And..." first ("...a globe. And... a teddy bear.")
+      const say = async () => {
+        if (!m.sound) return;
+        if (i === 0 && n > 1) await m.sound.playVoiceline('assets/sound/voice/item-names/and.mp3');
+        await m.sound.playVoiceline(line);
+      };
+      await Promise.all([say(), wait(BaggageClaim.slideGap(k))]);
     }
-    await wait(BaggageClaim.SLIDE_MS + 1000);
+    await wait(BaggageClaim.SLIDE_MS + 600);
 
     // 4. A score under each player: right picks minus wrong picks (so picking everything doesn't pay)
     const score = (p) => {
@@ -504,8 +644,13 @@ class BaggageClaim {
     else if (scores.every((v) => v === n)) losers = [];
     else losers = lowest.length <= 2 ? lowest : [];
     if (players.length > 1 && !scores.every((v) => v === n)) {
+      await say('worst', 9); // "And the worst memory belongs to...", "I remembered more than that..."
       nums.forEach((el, i) => el.classList.toggle('lowest', scores[i] === worst));
       if (m.sound) m.sound.playSlam(0.8);
+      if (lowest.length > 2) { // three or more tied: nobody dies
+        await wait(900);
+        await say('tie');
+      }
     }
     await wait(1800);
     // 6. The items are pulled off the right edge before anyone dies
@@ -514,7 +659,7 @@ class BaggageClaim {
     for (const [i, el] of parked.entries()) {
       el.style.transitionDuration = `${BaggageClaim.SLIDE_MS}ms`;
       el.classList.add('gone');
-      if (m.sound) m.sound.playWhoosh(0.12);
+      if (m.sound) m.sound.playSwish(0.5);
       await wait(BaggageClaim.slideGap(i));
     }
     await wait(BaggageClaim.SLIDE_MS + 200);

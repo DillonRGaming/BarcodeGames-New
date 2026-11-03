@@ -168,7 +168,7 @@ class Player {
     this.wrapper.appendChild(this.nameEl);
 
     // Money shown above the name on the scoreboard
-    this.money = 100;
+    this.money = 0; // the host hands out the first $100 when the game starts
     // Money shown on top of a T-shaped bar that rises with it
     this.moneyEl = document.createElement('div');
     this.moneyEl.className = 'player-money';
@@ -483,7 +483,7 @@ class Player {
   }
 
   setMoneyText(amount) {
-    this.moneyTextEl.textContent = `${amount < 0 ? '-' : ''}£${Math.abs(Math.round(amount))}`;
+    this.moneyTextEl.textContent = `${amount < 0 ? '-' : ''}$${Math.abs(Math.round(amount))}`;
   }
 
   /** The full chalk line is drawn at its final length, then revealed from the bottom */

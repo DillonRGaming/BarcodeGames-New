@@ -35,7 +35,9 @@ class SoundController {
     this.audioUnlocked = false;
     this.musicStarted = false;
     this.musicMuted = false;
-    this.MUSIC_TARGET_VOL = 0.65;
+    this.MUSIC_TARGET_VOL = 0.45;
+    this.VOICE_DUCK_VOL = 0.15; // music level while the host is talking
+    this.voiceActive = false;
     this.PIANO_TARGET_VOL = this.MUSIC_TARGET_VOL;
     this.musicFadeRAF = null;
     this.pianoFadeRAF = null;
@@ -62,7 +64,7 @@ class SoundController {
     if (!this.musicAudio) return;
 
     if (this.musicAudio.src && this.musicAudio.src.endsWith(src) && !this.musicAudio.paused) {
-      this.fadeAudio(this.musicAudio, this.MUSIC_TARGET_VOL, fadeDuration);
+      this.fadeAudio(this.musicAudio, this.musicLevel(), fadeDuration);
       return;
     }
 
@@ -73,13 +75,13 @@ class SoundController {
         this.musicAudio.currentTime = 0;
         this.musicAudio.volume = 0;
         this.musicAudio.play().then(() => {
-          this.fadeAudio(this.musicAudio, this.MUSIC_TARGET_VOL, fadeDuration);
+          this.fadeAudio(this.musicAudio, this.musicLevel(), fadeDuration);
         }).catch(() => {
           // Fallback to lobby.mp3 if specific file not yet present
           if (src !== this.tracks.lobby) {
             this.musicAudio.src = this.tracks.lobby;
             this.musicAudio.play().then(() => {
-              this.fadeAudio(this.musicAudio, this.MUSIC_TARGET_VOL, fadeDuration);
+              this.fadeAudio(this.musicAudio, this.musicLevel(), fadeDuration);
             }).catch(() => { });
           }
         });
@@ -162,7 +164,7 @@ class SoundController {
       this.musicAudio.volume = 0;
       this.musicAudio.play().then(() => {
         if (!this.musicMuted) {
-          this.fadeAudio(this.musicAudio, this.MUSIC_TARGET_VOL, 3500);
+          this.fadeAudio(this.musicAudio, this.musicLevel(), 3500);
         }
       }).catch(() => {
         this.musicStarted = false;
@@ -182,7 +184,7 @@ class SoundController {
       this.musicAudio.currentTime = 0;
       this.musicAudio.volume = 0;
       this.musicAudio.play().then(() => {
-        this.fadeAudio(this.musicAudio, this.MUSIC_TARGET_VOL, fadeDuration);
+        this.fadeAudio(this.musicAudio, this.musicLevel(), fadeDuration);
       }).catch(() => { });
     }
   }
@@ -224,11 +226,16 @@ class SoundController {
     }
   }
 
+  /** Where the music should sit right now: lower while the host is talking */
+  musicLevel() {
+    return this.voiceActive ? this.VOICE_DUCK_VOL : this.MUSIC_TARGET_VOL;
+  }
+
   fadeMusicIn(duration = 2500, target = this.MUSIC_TARGET_VOL) {
     if (this.musicAudio) {
       this.musicMuted = false;
       this.musicAudio.play().catch(() => { });
-      this.fadeAudio(this.musicAudio, target, duration);
+      this.fadeAudio(this.musicAudio, this.voiceActive ? Math.min(target, this.VOICE_DUCK_VOL) : target, duration);
     }
   }
 
@@ -378,24 +385,37 @@ class SoundController {
   playVoiceline(audioPath) {
     return new Promise((resolve) => {
       if (!audioPath) return resolve();
+      // A line that's cut off still resolves, so nothing waiting on it hangs
       if (this.currentVoiceline) {
         this.currentVoiceline.pause();
-        this.currentVoiceline = null;
+        if (this.currentVoiceDone) this.currentVoiceDone(true);
       }
       try {
-        this.duckMusic(0.20, 300); // Duck background music volume
+        this.voiceActive = true;
+        this.duckMusic(this.VOICE_DUCK_VOL, 300); // music drops under the host
         const audio = new Audio(audioPath);
         this.currentVoiceline = audio;
         audio.volume = 1.0;
-        const done = () => {
-          this.currentVoiceline = null;
-          this.unduckMusic(450); // Restore background music volume
+        let finished = false;
+        const done = (replaced = false) => {
+          if (finished) return;
+          finished = true;
+          if (this.currentVoiceline === audio) {
+            this.currentVoiceline = null;
+            this.currentVoiceDone = null;
+          }
+          if (!replaced) {
+            this.voiceActive = false;
+            this.unduckMusic(450); // music back up
+          }
           resolve();
         };
-        audio.onended = done;
-        audio.onerror = done;
-        audio.play().catch(done);
+        this.currentVoiceDone = done;
+        audio.onended = () => done();
+        audio.onerror = () => done();
+        audio.play().catch(() => done());
       } catch (e) {
+        this.voiceActive = false;
         this.unduckMusic(450);
         resolve();
       }
@@ -405,15 +425,33 @@ class SoundController {
   stopVoiceline() {
     if (this.currentVoiceline) {
       this.currentVoiceline.pause();
-      this.currentVoiceline = null;
-      this.unduckMusic(450);
+      if (this.currentVoiceDone) this.currentVoiceDone(); // resolves its promise and unducks
     }
+  }
+
+  /**
+   * M mutes everything: every <audio> and new Audio() (now and later) and the Web Audio context.
+   */
+  toggleMute() {
+    this.muted = !this.muted;
+    if (!SoundController.playPatched) {
+      SoundController.playPatched = true;
+      const play = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () {
+        this.muted = !!(window.gameSound && window.gameSound.muted);
+        return play.call(this);
+      };
+    }
+    document.querySelectorAll('audio, video').forEach((el) => { el.muted = this.muted; });
+    [this.musicAudio, this.currentVoiceline, this.lampAudio, this.horrorAudio].forEach((el) => { if (el) el.muted = this.muted; });
+    if (this.audioCtx) (this.muted ? this.audioCtx.suspend() : this.audioCtx.resume()).catch(() => { });
+    return this.muted;
   }
 
   /** A quick typewriter key click, synthesised (scrambling text plays these) */
   playTypeClick(volume = 0.12) {
     const ctx = this.audioCtx;
-    if (!ctx || ctx.state !== 'running') return;
+    if (this.muted || !ctx || ctx.state !== 'running') return;
     const len = Math.floor(ctx.sampleRate * 0.03);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
@@ -428,6 +466,13 @@ class SoundController {
     gain.gain.value = volume * (0.7 + Math.random() * 0.6);
     src.connect(band).connect(gain).connect(ctx.destination);
     src.start();
+  }
+
+  /** Ka-ching: money handed out */
+  playCashRegister(volume = 0.8) {
+    const a = new Audio('assets/sound/cash-register.mp3');
+    a.volume = volume;
+    a.play().catch(() => { });
   }
 
   /** The intro's scream, for a death */

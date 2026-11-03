@@ -3,8 +3,8 @@
  */
 
 const MAX_PLAYERS = 8;
-const DEV_RANDOM_MONEY = true; // testing: everyone starts with £0–£2000 instead of £100
-const DEV_BOTS = 0; // simulated players for testing; 0 to turn off
+const DEV_RANDOM_MONEY = false; // testing: everyone starts with $0–$2000 instead of $100
+const DEV_BOTS = 6; // simulated players for testing; 0 to turn off
 
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {
@@ -58,6 +58,7 @@ class GameManager {
     this._initInput();
     this.modMenu = new ModMenu(this);
     this._initLobbyUI();
+    this._startLobbyChatter();
     this._initRoom();
     this._startBlinkDirector();
   }
@@ -154,7 +155,7 @@ class GameManager {
     });
     player.colorIndex = colorIndex;
     player.onLifeChange = () => { if (player.roomId) this.sendProfile(player.roomId, player); }; // phone bar goes dead-coloured
-    if (DEV_RANDOM_MONEY) player.money = Math.round(Math.random() * 40) * 50; // £0–£2000
+    if (DEV_RANDOM_MONEY) player.money = Math.round(Math.random() * 40) * 50; // $0–$2000
     if (info.id) {
       player.roomId = info.id;
       this.playersById.set(info.id, player);
@@ -170,7 +171,7 @@ class GameManager {
     setTimeout(() => {
       if (!this.players.includes(player)) return;
       player.startReviveSpin();
-      if (this.sound) this.sound.playWhoosh();
+      if (this.sound) this.sound.playSwish(0.75); // same swish as the answers sliding in
     }, 3600);
     return player;
   }
@@ -240,7 +241,7 @@ class GameManager {
     this.pendingJoins = [];
 
     // Dev: simulate bots joining one by one (they answer randomly)
-    const bots = ['SPOOKY', 'GHOUL', 'BONES', 'MOTH', 'CREEP', 'WISP'];
+    const bots = ['SPOOKY', 'GHOUL', 'BONES', 'MOTH', 'CREEP', 'WISP', 'HOLLOW', 'NIGHT'];
     bots.slice(0, DEV_BOTS).forEach((name, i) => {
       setTimeout(() => {
         if (this.gameState === 'LOBBY') this.addPlayer({ name });
@@ -260,6 +261,24 @@ class GameManager {
   /* =========================================
      Lobby State & Player Roster Management
      ========================================= */
+
+  /**
+   * While the lobby waits, the host mutters one of his lobby lines 10 s in, then every 20-30 s, each one once
+   * before any repeats. Quiet during the start countdown and once the game is under way.
+   */
+  _startLobbyChatter() {
+    const LINES = ['01', '03', '04', '05', '06', '07', '12', '15', '16', '21', '23', '26', '27', '30', '37', '39'];
+    let bag = [];
+    const next = (delay) => setTimeout(async () => {
+      const s = this.sound;
+      if (this.gameState === 'LOBBY' && !this.countdownTimer && s && s.audioUnlocked && !s.currentVoiceline) {
+        if (!bag.length) bag = [...LINES].sort(() => Math.random() - 0.5);
+        await s.playVoiceline(`assets/sound/voice/lobby/lobby-${bag.pop()}.mp3`);
+      }
+      next(20000 + Math.random() * 10000);
+    }, delay);
+    next(10000);
+  }
 
   _initLobbyUI() {
     if (this.startPromptEl) {
@@ -455,7 +474,7 @@ class GameManager {
 
     // Same route into the first question as the full intro: scoreboard, lineup, room moves
     await new Promise((r) => setTimeout(r, 800));
-    await this.showScoreboard();
+    await this.showScoreboard({ startingMoney: true });
     this.flyTo('lineup');
     await new Promise((r) => setTimeout(r, 1000));
     if (this.room) this.room.bgScrolling = true;
@@ -467,10 +486,27 @@ class GameManager {
    * Scoreboard: room still, everyone flies to one low row (richest on the left),
    * money pops in above them and counts to the new totals.
    */
-  async showScoreboard() {
+  /** Everyone starts on $0; the host hands out $100 each just before the first scoreboard */
+  async handOutStartingMoney() {
+    if (this.sound) {
+      // A lone player gets a line without "each" or "everyone"
+      const line = this.players.length === 1 ? 'start-money-solo' : `start-money-${1 + Math.floor(Math.random() * 5)}`;
+      await this.sound.playVoiceline(`assets/sound/voice/${line}.mp3`); // "Here. Have a hundred dollars..."
+    }
+    this.players.forEach((p) => { p.money += 100; });
+    if (this.sound) this.sound.playCashRegister();
+  }
+
+  /** `startingMoney`: the first one, where the host hands out $100 once everyone's in place */
+  async showScoreboard({ startingMoney = false } = {}) {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     if (!this.players.length) return;
     if (this.room) this.room.bgScrolling = false;
+
+    // "Let's see your bank accounts." before everyone moves into place
+    // (a lone player gets "your bank account")
+    const solo = this.players.length === 1 ? 'bank-account-solo' : 'bank-accounts';
+    if (this.sound) await this.sound.playVoiceline(`assets/sound/voice/${solo}-${1 + Math.floor(Math.random() * 3)}.mp3`);
 
     const ranked = [...this.players].sort((a, b) => b.money - a.money); // sort is stable: ties keep join order
     ranked.forEach((p, i) => p.slot.style.setProperty('--rank', ranked.length - 1 - i)); // richest on the right
@@ -480,14 +516,14 @@ class GameManager {
     if (this.sound) this.sound.playLight();
     await wait(450);
 
-    // Each bar rises from £0 at the same £/second, so the richest take longest.
+    // Each bar rises from $0 at the same $/second, so the richest take longest.
     // The scale is set so the richest bar always fits between the row and the top of the screen.
     const SCALE = 0.9; // scoreboard player scale (see flyTo)
     const POUNDS_PER_SEC = 300;
     const top = Math.max(100, ...ranked.map((p) => p.money));
     const slotTop = ranked[0].slot.getBoundingClientRect().top + 62.5 * (1 - SCALE);
     const roomPx = (slotTop - 54 * SCALE - 50 - 30) / SCALE; // minus label and a margin from the screen top
-    // A full-height bar is ~£1500; only squash the scale when someone has more than that
+    // A full-height bar is ~$1500; only squash the scale when someone has more than that
     const pxPerPound = Math.max(0, roomPx) / Math.max(1500, top);
     ranked.forEach((p) => p.moneyBarEl.style.setProperty('--groove', `${(100 * pxPerPound).toFixed(2)}px`));
 
@@ -500,6 +536,15 @@ class GameManager {
     });
     if (this.sound) this.sound.playSwish(0.6);
     await wait(600);
+
+    // First scoreboard: everyone sits on $0 for a moment, then the host hands out $100 and the
+    // bars rise to it
+    if (startingMoney) {
+      await wait(1500);
+      await this.handOutStartingMoney(); // "Here. Have a hundred dollars...", ka-ching
+      ranked.forEach((p) => p.setMoneyBarLength(Math.max(0, p.money) * pxPerPound));
+      await wait(400);
+    }
 
     const finished = new Set();
     const start = performance.now();
@@ -517,7 +562,7 @@ class GameManager {
             if (this.sound && now - start > 50) this.sound.playSwish(0.45);
           }
         });
-        // One chime per £100 notch crossed (all bars rise together), climbing in pitch
+        // One chime per $100 notch crossed (all bars rise together), climbing in pitch
         const notch = Math.floor(Math.min(pounds, top) / 100);
         while (notchesChimed < notch) {
           notchesChimed++;
@@ -542,7 +587,6 @@ class GameManager {
     this.isIntroRunning = true;
     this.isIntroSkipped = false;
     this.gameState = 'INTRO';
-    if (this.gameRoomCodeEl) this.gameRoomCodeEl.classList.remove('hidden');
     if (this.net) {
       this.net.lock(); // no new players once the game starts; drop-outs can still rejoin
       this.setPhoneState({ type: 'intro' }); // VIP's phone gets a Skip Intro button
@@ -643,6 +687,7 @@ class GameManager {
       void curtains.offsetWidth; // Force layout reflow
       curtains.classList.add('fade-in');
     }
+    if (this.gameRoomCodeEl) this.gameRoomCodeEl.classList.remove('hidden'); // with the curtains, before they open
 
     // Wait 1.8s for curtains to reach full opacity behind the logo
     await new Promise((r) => setTimeout(r, 1800));
@@ -694,7 +739,7 @@ class GameManager {
     // 16. Show players in the grid, then the starting scoreboard
     await new Promise((r) => setTimeout(r, 1500));
     if (this.isIntroSkipped) return;
-    await this.showScoreboard();
+    await this.showScoreboard({ startingMoney: true });
     if (this.isIntroSkipped) return;
 
     // 17. Perform lineup movement to the top row
@@ -868,6 +913,7 @@ class GameManager {
     };
 
     updateWatchUI(this.questionSeconds);
+    const halfway = Math.floor(this.questionSeconds / 2);
 
     this.questionTimer = setInterval(() => {
       this.questionSeconds--;
@@ -875,6 +921,13 @@ class GameManager {
 
       if (this.questionSeconds > 0 && this.sound) {
         this.sound.playTick(0.85);
+      }
+      // Halfway, sometimes, the host pipes up ("No cheating!"); every line once before repeats
+      if (this.questionSeconds === halfway && this.sound && !this.sound.currentVoiceline && Math.random() < 0.5) {
+        if (!this.midQuestionBag || !this.midQuestionBag.length) {
+          this.midQuestionBag = ['01', '02', '03', '04', '05', '06', '07', '08', '09'].sort(() => Math.random() - 0.5);
+        }
+        this.sound.playVoiceline(`assets/sound/voice/midq/midq-${this.midQuestionBag.pop()}.mp3`);
       }
 
       if (this.questionSeconds <= 0) {
@@ -899,16 +952,14 @@ class GameManager {
     this.killingRoom = null;
     this.setPhoneState({ type: 'wait' });
     this.runRoomTransitionLoop(() => {
-      if (director) {
-        director.leave();
-      } else {
+      if (!director) {
         this.camera.setGridMode('grid');
         this.players.forEach((p) => {
           p.cancelFlight();
           p.clearResult(1.0);
         });
       }
-    }, () => { if (director) director.phonesOut(); });
+    }, () => { if (director) { director.leave(); director.phonesOut(); } });
   }
 
   /** Everyone has locked in: the clock goes to 0 now and the round carries on as if it ran out */
@@ -952,7 +1003,10 @@ class GameManager {
     }
     this.killingRoom = null;
     this.setPhoneState({ type: 'wait' });
-    this.runRoomTransitionLoop(() => director.leave(), () => director.phonesOut()); // out of the killing room like any room change
+    // Out of the killing room like any room change. In the dark only the killing room's eyes still
+    // show; everything goes back to the hotel the moment the lights come up
+    this.scoreboardDue = true;
+    this.runRoomTransitionLoop(null, () => { director.leave(); director.phonesOut(); });
   }
 
   async handleQuestionTimeout() {
@@ -965,6 +1019,10 @@ class GameManager {
     // A beat on 0 before anything is revealed
     this.acceptingAnswers = false;
     await new Promise((r) => setTimeout(r, 1000));
+    if (skipped()) return;
+
+    // "The answer is..." (one of four), then the reveal
+    if (this.sound) await this.sound.playVoiceline(`assets/sound/voice/reveal/before-${1 + Math.floor(Math.random() * 5)}.mp3`);
     if (skipped()) return;
 
     // 1. Reveal answers on the question board (wrong choices dim, correct choice gets slightly smaller)
@@ -983,12 +1041,14 @@ class GameManager {
     // 2. Each player chooses randomly; show Tick (✔) only for correct players
     const activePlayers = this.getActivePlayers();
     this.acceptingAnswers = false;
+    let rightCount = 0;
     activePlayers.forEach((p) => {
       // Real players use their phone answer (no answer = wrong); dev bots still guess
       const playerChoice = p.roomId
         ? (this.answers && this.answers.get(p.roomId))
         : p.botChoice;
       const isCorrect = (playerChoice === correctIdx);
+      if (isCorrect) rightCount++;
       p.money += isCorrect ? 100 : -50;
       p.showResult(isCorrect, 0.72);
       if (p.roomId) this.net.sendTo(p.roomId, { type: 'reveal', correct: isCorrect });
@@ -999,8 +1059,16 @@ class GameManager {
       this.sound.playLight();
     }
 
-    // 3. Wait 3.5 seconds for players to see and react to the results
-    await new Promise((r) => setTimeout(r, 3500));
+    // 3. The host reacts (everyone right / nobody / some), then a moment to take it in.
+    //    A lone player gets no reaction: the lines all talk to a group.
+    await new Promise((r) => setTimeout(r, 1200));
+    if (skipped()) return;
+    if (this.sound && activePlayers.length > 1) {
+      const how = rightCount === activePlayers.length ? 'all' : rightCount === 0 ? 'none' : 'some';
+      const takes = { all: 4, none: 3, some: 4 }[how];
+      await this.sound.playVoiceline(`assets/sound/voice/reveal/${how}-${1 + Math.floor(Math.random() * takes)}.mp3`);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
     if (skipped()) return;
 
     // 4. Hide question board, answers, and clock
@@ -1010,8 +1078,10 @@ class GameManager {
     await new Promise((r) => setTimeout(r, 2000));
     if (skipped()) return;
 
-    // 5b. The last living player to answer is taken to the killing room (volunteers may join)
-    const taken = this.lastToAnswer();
+    // 5b. After every question, the last living player to answer is taken to the killing room
+    //     (volunteers may join)
+    const killingRound = true;
+    const taken = killingRound ? this.lastToAnswer() : null;
     if (taken) {
       // Ticks fade first, then the room winds down: scrolling coasts to a stop (~2s), everyone
       // freezes and the music fades out with it. A beat of silence, then the killing room starts.
@@ -1117,8 +1187,11 @@ class GameManager {
     await new Promise((r) => setTimeout(r, 2000));
     if (skipped()) return;
 
-    // Every 3 rounds, the scoreboard before the next question
-    if (this.currentQuestionIdx % 3 === 0) await this.showScoreboard();
+    // After a killing room, the scoreboard before the next question
+    if (this.scoreboardDue) {
+      this.scoreboardDue = false;
+      await this.showScoreboard();
+    }
     if (skipped()) return;
 
     // Move to top lineup
@@ -1142,7 +1215,7 @@ class GameManager {
         this.sound.playSwish(0.75);
         break;
       case 'SOUND_WHOOSH':
-        this.sound.playWhoosh();
+        this.sound.playSwish(0.75); // same swish as the answers sliding in
         break;
       case 'SOUND_GHOST':
         this.sound.playGhost();
@@ -1432,7 +1505,7 @@ class GameManager {
       } else if (e.key === 'Enter') {
         this.startLobbyGame();
       } else if (key === 'm') {
-        this.room.toggleScrolling();
+        if (this.sound) this.sound.toggleMute();
       } else if (key === 'l') {
         this.toggleLineup();
       } else if (key === 'escape' || key === 's') {

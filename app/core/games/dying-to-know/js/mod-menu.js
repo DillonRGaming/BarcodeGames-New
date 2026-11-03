@@ -202,7 +202,7 @@ class ModMenu {
       const state = p.isDead() ? 'dead' : p.isAlive() ? 'alive' : '…';
       return `
         <div class="mod-player ${state}">
-          <div class="who"><i style="background:${p.nameColor}"></i><b>${p.name}</b><span>${p.roomId ? 'phone' : 'bot'}${p.isVip ? ' · VIP' : ''} · ${state} · £${p.money}</span></div>
+          <div class="who"><i style="background:${p.nameColor}"></i><b>${p.name}</b><span>${p.roomId ? 'phone' : 'bot'}${p.isVip ? ' · VIP' : ''} · ${state} · $${p.money}</span></div>
           <div class="row">
             ${[1, 2, 3, 4].map((n) => `<button data-act="answer" data-i="${i}" data-n="${n}" ${answering && !answer ? '' : 'disabled'} class="${answer === n ? 'picked' : ''}">${n}</button>`).join('')}
             ${offer ? `<button data-act="volunteer" data-i="${i}">Volunteer</button>` : ''}

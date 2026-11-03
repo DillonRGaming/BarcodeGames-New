@@ -1,0 +1,941 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rip test</title>
+<style>
+  body { margin: 0; background: #0b0507; color: #ddd; font: 14px sans-serif; overflow: hidden; }
+  .bar { position: fixed; top: 0; left: 0; z-index: 2; }
+  .bar { display: flex; gap: 8px; align-items: center; padding: 10px; }
+  canvas { display: block; margin: 0 auto; max-width: 100%; }
+  button, select { font: inherit; }
+</style>
+</head>
+<body>
+<!-- Dev test page: the killing-room rip on a real player letter. Not part of the game. -->
+<div class="bar">
+  <button id="go">Rip</button>
+  <button id="burn">Burn</button>
+  <button id="shock">Electrocute</button>
+  <button id="chop">Chop</button>
+  <button id="balloon">Balloon</button>
+  <select id="letter"></select>
+  <select id="col"></select>
+</div>
+<canvas id="cv"></canvas>
+<script src="js/palette.js"></script>
+<script src="js/deaths.js"></script>
+<script>
+const COLOURS = { blue: '#2f7cf6', red: '#f0413d', green: '#2fbf5b', yellow: '#ffc21a', purple: '#9a5cf0', orange: '#ff7a1f', pink: '#f25aa8', teal: '#14b8aa', brown: '#b8743c', white: '#e8e4dc' };
+// Embedded in the game (?embed=rip|chop|balloon): no controls, the canvas covers the screen at the scale
+// the game shows the letter (h: its on-screen height; x, top: its centre and top), the death room behind it.
+// It tells the game 'ready' once loaded, plays on 'go', and says 'done' when it's time for the ghost.
+const Q = new URLSearchParams(location.search), EMBED = Q.get('embed');
+const ES = EMBED ? Number(Q.get('h')) / 300 : 1; // screen pixels per canvas pixel (letters are drawn 300 tall)
+const cv = document.getElementById('cv'); cv.width = Math.round(innerWidth / ES); cv.height = Math.round(innerHeight / ES);
+if (EMBED) { cv.style.width = '100vw'; cv.style.height = '100vh'; cv.style.maxWidth = 'none'; document.querySelector('.bar').style.display = 'none'; }
+const letterAt = () => (EMBED ? [Number(Q.get('x')) / ES - SW / 2, Number(Q.get('top')) / ES] : [W / 2 - MIDX, H / 2 - FOOT / 2]);
+let doneSent = false;
+const finished = () => { if (EMBED && !doneSent) { doneSent = true; parent.postMessage({ gore: 'done' }, '*'); } };
+const cx = cv.getContext('2d'), W = cv.width, H = cv.height, FLOOR = H * 0.84; // where the room's floor is
+// the killing room's wall, tiled sideways at full height like the game
+const roomBg = new Image(); roomBg.src = EMBED ? 'assets/images/rooms/lobby-small.jpg' : 'assets/images/killing/baggage-claim/background.png';
+function drawRoom() {
+  if (EMBED) { // the game's death room: the lobby wallpaper tiled from the middle at full height, its hue turned to the player's colour
+    cx.fillStyle = '#0b0507'; cx.fillRect(-W, -H, W * 3, H * 3);
+    if (!roomBg.naturalHeight) return;
+    const tw = roomBg.naturalWidth * H / roomBg.naturalHeight; for (let x = W / 2 - tw / 2 - Math.ceil(W / tw + 1) * tw; x < W * 2; x += tw) cx.drawImage(roomBg, x, 0, tw, H);
+    cx.save(); cx.globalCompositeOperation = 'hue'; cx.fillStyle = Q.get('col'); cx.fillRect(-W, -H, W * 3, H * 3); cx.restore(); return;
+  } if (!roomBg.complete || !roomBg.naturalHeight) { cx.fillStyle = '#0b0507'; cx.fillRect(0, 0, W, H); return; } const m = 30, th = H + m * 2, tw = roomBg.naturalWidth * th / roomBg.naturalHeight; for (let x = -m; x < W + m; x += tw) cx.drawImage(roomBg, x, -m, tw, th); } // a margin all round so camera shake never shows the edge
+const letterSel = document.getElementById('letter'), colSel = document.getElementById('col');
+'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((l) => letterSel.add(new Option(l, l, false, l === 'D')));
+Object.keys(COLOURS).forEach((c) => colSel.add(new Option(c, c)));
+// a random letter and colour every refresh
+letterSel.selectedIndex = Math.random() * letterSel.options.length | 0;
+colSel.selectedIndex = Math.random() * colSel.options.length | 0;
+if (EMBED) { COLOURS.game = Q.get('col'); colSel.add(new Option('game', 'game')); colSel.value = 'game'; letterSel.value = Q.get('letter'); }
+
+const boneImg = new Image(); boneImg.src = 'assets/images/killing/bone.svg';
+let AC = null;
+const audioCtx = () => (AC = AC || new (window.AudioContext || window.webkitAudioContext)());
+// Recorded sounds (assets/sound/killing), decoded once so they can be looped, sped up and sliced
+const BUF = {}, BUF_LOADS = [];
+['pierce', 'guts', 'squelch', 'chewing', 'heartbeat', 'balloon-pump', 'balloon-rub', 'balloon-pop'].forEach((n) => BUF_LOADS.push(fetch(`assets/sound/killing/${n}.mp3`).then((r) => r.arrayBuffer()).then((a) => audioCtx().decodeAudioData(a)).then((b) => { BUF[n] = b; }).catch(() => {})));
+const LIVE = new Set(); // every sound still playing, so a new rip can cut them all
+function playBuf(name, { vol = 1, rate = 1, offset = 0, dur, loop = false, fade = 0.08 } = {}) {
+  const b = BUF[name]; if (!b) return null; const ac = audioCtx(), src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime;
+  src.buffer = b; src.loop = loop; src.playbackRate.value = rate; g.gain.value = vol; src.connect(g).connect(ac.destination);
+  src.start(t, offset);
+  if (dur) { const end = t + dur / rate; g.gain.setValueAtTime(vol, Math.max(t, end - fade)); g.gain.linearRampToValueAtTime(0, end); src.stop(end + 0.01); } // cut with a short fade, no click
+  const h = { src, g }; LIVE.add(h); src.onended = () => LIVE.delete(h); return h;
+}
+function stopAll() { if (!AC) return; const e = AC.currentTime; LIVE.forEach(({ src, g }) => { g.gain.cancelScheduledValues(e); g.gain.setValueAtTime(g.gain.value, e); g.gain.linearRampToValueAtTime(0, e + 0.05); try { src.stop(e + 0.06); } catch (_) {} }); LIVE.clear(); }
+const SFX = {
+  /** heartbeat and wet chewing under the pull; tension(0..1) speeds the heart and swells the chewing */
+  pull() {
+    const hb = playBuf('heartbeat', { vol: 0.9, loop: true }), ch = playBuf('chewing', { vol: 0.15, loop: true });
+    return { tension(k) { if (hb) hb.src.playbackRate.value = 1 + k * 1.3; if (ch) ch.g.gain.value = 0.15 + k * 0.75; },
+      stop() { const e = audioCtx().currentTime; [hb, ch].forEach((x) => { if (!x) return; x.g.gain.cancelScheduledValues(e); x.g.gain.setValueAtTime(x.g.gain.value, e); x.g.gain.exponentialRampToValueAtTime(0.0001, e + 0.06); x.src.stop(e + 0.08); }); } };
+  },
+  /** the blade going in, right at the start */
+  pierce() { playBuf('pierce', { vol: 1, dur: 0.9, fade: 0.25 }); },
+  /** a short random bit of the guts recording, for a tendril snapping */
+  gutsBit(size = 1) { const b = BUF.guts; if (b) playBuf('guts', { vol: 0.5 * size, rate: 0.9 + Math.random() * 0.3, offset: Math.random() * (b.duration - 0.5), dur: 0.25 + Math.random() * 0.15 }); },
+  /** a tendril snapping */
+  snap(size = 1) { SFX.gutsBit(size); },
+  /** the final tear: the squelch and a longer stretch of guts */
+  tear() { playBuf('squelch', { vol: 1, dur: 1.2, fade: 0.3 }); playBuf('guts', { vol: 0.9, offset: 0, dur: 1.6, fade: 0.4 }); },
+  /** an eye popping out */
+  pop() { playBuf('squelch', { vol: 0.45, rate: 1.6, offset: 0.05, dur: 0.25 }); }
+};
+let FOOT = 0, MIDX = 0; // the lowest row of the letter's drawing (the art has empty space below it)
+let SW = 0, SH = 0, off, ox, topC, tx, botC, bx, col = COLOURS.blue, run = null;
+let splats = []; // blood sprayed onto the front of the letter by the stab (letter coordinates)
+let seam = [], wet = [], strands = [], drops = [], pools = [], runs = [], eyes = [];
+const mk = () => { const c = document.createElement('canvas'); c.width = SW; c.height = SH; return c; };
+function shade(h, a) { const n = parseInt(h.slice(1), 16); const r = n >> 16, g = n >> 8 & 255, b = n & 255; return `rgb(${Math.min(255, r * a) | 0},${Math.min(255, g * a) | 0},${Math.min(255, b * a) | 0})`; }
+
+/** Load the real letter art, tint it like the game does, and cut the eyes out as separate sprites */
+function loadLetter(l) {
+  return new Promise((res) => {
+    const img = new Image();
+    img.onload = () => {
+      SH = 300; SW = Math.round(img.width / img.height * SH);
+      off = mk(); ox = off.getContext('2d', { willReadFrequently: true });
+      topC = mk(); tx = topC.getContext('2d'); botC = mk(); bx = botC.getContext('2d');
+      ox.drawImage(img, 0, 0, SW, SH);
+      tintLetterCanvas(ox, SW, SH, col);
+      findEyes();
+      { const d = ox.getImageData(0, 0, SW, SH).data; FOOT = SH; for (let y = SH - 1; y > 0; y--) { let any = false; for (let x = 0; x < SW; x += 2) if (d[(y * SW + x) * 4 + 3] > 100) { any = true; break; } if (any) { FOOT = y + 1; break; } }
+        // and the drawing's left/right edges, so it can be centred on what's drawn, not the image
+        let l = SW, r = 0; for (let y = 0; y < SH; y += 2) for (let x = 0; x < SW; x++) if (d[(y * SW + x) * 4 + 3] > 100) { if (x < l) l = x; if (x > r) r = x; } MIDX = (l + r) / 2; }
+      res();
+    };
+    ripLetter = l;
+    img.src = `assets/images/letters/${l}.png`;
+  });
+}
+
+/**
+ * Eyes: each has a white shine inside a black pupil. Take the two biggest shines, then grow the eye
+ * out from each one over the black around it, but only within a circle (so a brow or moustache that
+ * touches the eye stays on the letter). Lift those pixels off the letter as sprites.
+ */
+let eyeSprites = [];
+function findEyes() {
+  const id = ox.getImageData(0, 0, SW, SH), d = id.data, seen = new Uint8Array(SW * SH);
+  const dark = (i) => d[i * 4 + 3] > 100 && d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2] < 150;
+  const white = (i) => { const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2]; return d[i * 4 + 3] > 100 && Math.min(r, g, b) > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 45; }; // shines, including the greyer ones
+  // Black shapes (pupil, maybe joined to a brow) that have a white shine inside them
+  // body = the tinted letter colour at some brightness; anything else inside an eye ray is still eye
+  const tgt = [1, 3, 5].map((k) => parseInt(col.slice(k, k + 2), 16)), tl = 0.299 * tgt[0] + 0.587 * tgt[1] + 0.114 * tgt[2];
+  const body = (i) => { if (d[i * 4 + 3] < 100) return true; const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2], k = (0.299 * r + 0.587 * g + 0.114 * b) / tl; if (k < 0.4) return false; return Math.hypot(r - tgt[0] * k, g - tgt[1] * k, b - tgt[2] * k) < 45; };
+  const shines = [];
+  for (let y = 0; y < SH * 0.75; y++) for (let x = 0; x < SW; x++) {
+    const i = y * SW + x; if (seen[i] || !dark(i)) continue;
+    const stack = [i], whites = []; let n = 0; seen[i] = 1;
+    while (stack.length) { const j = stack.pop(); n++; if (white(j)) whites.push(j); const jx = j % SW, jy = (j / SW) | 0;
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([ax, ay]) => { const nx = jx + ax, ny = jy + ay; if (nx < 0 || ny < 0 || nx >= SW || ny >= SH) return; const k = ny * SW + nx; if (!seen[k] && (dark(k) || white(k))) { seen[k] = 1; stack.push(k); } }); }
+    if (whites.length < 6 || n < 80) continue;
+    // split the shines in this shape into separate clusters (one per eye if two eyes are joined)
+    const ws = new Set(whites), done = new Set();
+    whites.forEach((w0) => { if (done.has(w0)) return; const st2 = [w0], cl = []; done.add(w0);
+      while (st2.length) { const j = st2.pop(); cl.push(j); const jx = j % SW, jy = (j / SW) | 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const k = (jy + dy) * SW + jx + dx; if (ws.has(k) && !done.has(k)) { done.add(k); st2.push(k); } } }
+      if (cl.length < 6) return; let sx = 0, sy = 0; cl.forEach((j) => { sx += j % SW; sy += (j / SW) | 0; }); shines.push({ x: sx / cl.length, y: sy / cl.length, n: cl.length }); });
+  }
+  shines.sort((p, q) => q.n - p.n);
+  // rip.json can place the eyes by hand; otherwise the two (or three, if just as big) biggest shines
+  const fixed = (RIP[ripLetter] || {}).eyes;
+  const picked = Array.isArray(fixed) ? fixed.map(([fx, fy]) => ({ x: fx * SW, y: fy * SH, n: 99 }))
+    : shines.filter((sh, k) => k < 2 || (k < 3 && sh.n > shines[0].n * 0.6));
+  eyeSprites = picked.map((sh) => {
+    // radius: how far the black reaches from the shine, median over 16 rays
+    const reach = [];
+    for (let a = 0; a < 16; a++) { const ang = a / 16 * Math.PI * 2; let r = 2; while (r < 60) { const k = Math.round(sh.y + Math.sin(ang) * r) * SW + Math.round(sh.x + Math.cos(ang) * r); if (body(k)) break; r++; } reach.push(r); }
+    reach.sort((p, q) => p - q); const R = Math.min(reach[8] + 1, 40);
+    // the pupil's centre is offset from the shine: centre on the black's own middle along x/y rays
+    const ray = (dx, dy) => { let r = 1; while (r < 60) { const k = Math.round(sh.y + dy * r) * SW + Math.round(sh.x + dx * r); if (body(k)) break; r++; } return r; };
+    const ccx = sh.x + (ray(1, 0) - ray(-1, 0)) / 2, ccy = sh.y + (ray(0, 1) - ray(0, -1)) / 2;
+    const x0 = Math.max(0, Math.floor(ccx - R)), y0 = Math.max(0, Math.floor(ccy - R)), w = Math.ceil(R * 2), h = Math.ceil(R * 2), px = [];
+    for (let y = y0; y < y0 + h && y < SH; y++) for (let x = x0; x < x0 + w && x < SW; x++) { const i = y * SW + x; if (Math.hypot(x - ccx, y - ccy) <= R && !body(i)) px.push(i); }
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const cc = c.getContext('2d'), sid = cc.createImageData(w, h);
+    px.forEach((j) => { const jx = j % SW, jy = (j / SW) | 0, o = ((jy - y0) * w + (jx - x0)) * 4; for (let k = 0; k < 4; k++) sid.data[o + k] = d[j * 4 + k]; });
+    cc.putImageData(sid, 0, 0);
+    return { c, x: x0 + w / 2, y: y0 + h / 2, w, h, px, bottom: ccy + R };
+  });
+  const id2 = ox.getImageData(0, 0, SW, SH);
+  eyeSprites.forEach((e) => e.px.forEach((j) => { id2.data[j * 4] = 26; id2.data[j * 4 + 1] = 5; id2.data[j * 4 + 2] = 7; id2.data[j * 4 + 3] = 255; }));
+  socketData = id2;
+}
+let socketData = null;
+
+const fill = (x, y) => { const p = ox.getImageData(x | 0, y | 0, 1, 1).data; return p[3] > 0 && (p[0] + p[1] + p[2]) > 60; };
+const inside = (x, y) => ox.getImageData(x | 0, y | 0, 1, 1).data[3] > 0;
+function bestSeamY() {
+  const id = ox.getImageData(0, 0, SW, SH).data; let best = SH * 0.55, bestScore = -1;
+  const below = Math.max(SH * 0.35, ...eyeSprites.map((e) => e.bottom + 10));
+  for (let y = Math.round(below); y <= SH * 0.8; y += 2) {
+    let body = 0, feature = 0;
+    for (let x = 0; x < SW; x++) { const o = (y * SW + x) * 4; if (id[o + 3] < 100) continue; (id[o] + id[o + 1] + id[o + 2] < 90 ? feature++ : body++); }
+    const score = body - feature * 3; if (score > bestScore) { bestScore = score; best = y; }
+  }
+  return best;
+}
+let RIP = {}, ripLetter = 'D';
+fetch('rip.json', { cache: 'no-store' }).then((r) => r.json()).then((j) => { RIP = j; }).catch(() => {});
+/** The tear line from rip.json for this letter (fractions), at pixel x */
+function configY(x) {
+  const pts = (RIP[ripLetter] || {}).seam; if (!Array.isArray(pts)) return null;
+  const u = x / SW; for (let i = 0; i < pts.length - 1; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1]; if (u >= x0 && u <= x1) return (y0 + (y1 - y0) * ((u - x0) / ((x1 - x0) || 1))) * SH; }
+  return (u < pts[0][0] ? pts[0][1] : pts[pts.length - 1][1]) * SH;
+}
+/** A tear never runs through an eye: wherever it would, it curves under (or over) the eye instead */
+function guardEyes() {
+  eyeSprites.forEach((e) => {
+    const top = e.y - e.h / 2 - 6, bot = e.y + e.h / 2 + 6, r = e.w / 2 + 14;
+    seam.forEach((p) => { const dx = Math.abs(p[0] - e.x); if (dx > r) return; const lift = Math.cos(Math.min(1, dx / r) * Math.PI / 2);
+      if (p[1] > top && p[1] < bot) { const under = bot - p[1] < p[1] - top; p[1] = under ? Math.max(p[1], p[1] + (bot - p[1]) * (0.35 + 0.65 * lift)) : Math.min(p[1], p[1] - (p[1] - top) * (0.35 + 0.65 * lift)); } });
+  });
+}
+function makeSeam() {
+  if (Array.isArray((RIP[ripLetter] || {}).seam)) { seam = []; let j = 0; for (let x = 0; x <= SW + 6; x += 6) { j = Math.max(-4, Math.min(4, j + (Math.random() - 0.5) * 3)); seam.push([x, configY(x) + j]); } guardEyes(); wet = seam.map(() => 0); return; }
+  // Default: the crease nearest the middle, i.e. the narrowest row of the letter below the eyes,
+  // with a slight pull towards the middle so it doesn't pick a thin stem near the bottom
+  const id = ox.getImageData(0, 0, SW, SH).data, eyeLow = Math.max(0, ...eyeSprites.filter((e) => e.y < SH * 0.6).map((e) => e.y + e.h / 2));
+  const lo = Math.round(Math.max(SH * 0.3, eyeLow + 10)), hi = Math.round(SH * 0.8), wid = [];
+  for (let y = 0; y < SH; y++) { let w = 0; for (let x = 0; x < SW; x++) if (id[(y * SW + x) * 4 + 3] > 100) w++; wid.push(w); }
+  const sm = wid.map((_, y) => { let t = 0, n = 0; for (let k = -3; k <= 3; k++) if (wid[y + k] !== undefined) { t += wid[y + k]; n++; } return t / n; });
+  // a crease = the letter pinches in: narrower than the rows a little above and below it
+  let best = Math.max(lo, SH * 0.55), bestD = Infinity;
+  for (let y = lo; y <= hi; y++) {
+    let above = 0, below = 0; for (let k = 6; k <= 18; k++) { above = Math.max(above, sm[y - k] || 0); below = Math.max(below, sm[y + k] || 0); }
+    if (sm[y] < above * 0.93 && sm[y] < below * 0.93) { const d = Math.abs(y - SH * 0.55); if (d < bestD) { bestD = d; best = y; } }
+  }
+  seam = []; let j = 0;
+  for (let x = 0; x <= SW + 6; x += 6) { j = Math.max(-4, Math.min(4, j + (Math.random() - 0.5) * 3)); seam.push([x, best + j]); }
+  guardEyes();
+  wet = seam.map(() => 0); }
+function seamY(x) { const i = Math.max(0, Math.min(seam.length - 2, Math.floor(x / 6))); const a = seam[i], b = seam[i + 1]; return a[1] + (b[1] - a[1]) * ((x - a[0]) / 6); }
+function clipHalf(c, top) { c.beginPath(); if (top) { c.moveTo(0, -10); seam.forEach((p) => c.lineTo(p[0], p[1])); c.lineTo(SW, -10); } else { c.moveTo(0, SH + 10); seam.forEach((p) => c.lineTo(p[0], p[1])); c.lineTo(SW, SH + 10); } c.closePath(); c.clip(); }
+let bone = null, bonesList = [];
+function placeBone() {
+  const cfg = (RIP[ripLetter] || {}).bone, id = ox.getImageData(0, 0, SW, SH).data, solid = (x, y) => id[((y | 0) * SW + (x | 0)) * 4 + 3] > 100;
+  let best = null;
+  if (Array.isArray(cfg)) best = { x: cfg[0] * SW, top: cfg[1] * SH, bot: cfg[2] * SH };
+  else for (let x = 8; x < SW - 8; x += 3) { const y0 = seamY(x); if (!solid(x, y0)) continue; let t = y0, b = y0; while (t > 0 && solid(x, t - 1)) t--; while (b < SH - 1 && solid(x, b + 1)) b++;
+    // horizontal room around the seam here, so the bone isn't wider than the stroke
+    let l = x, r = x; while (l > 0 && solid(l - 1, y0)) l--; while (r < SW - 1 && solid(r + 1, y0)) r++;
+    const len = b - t, room = Math.min(x - l, r - x); if (room < 12) continue;
+    const sc = len * (1 - Math.abs(x / SW - 0.5) * 0.6); if (!best || sc > best.sc) best = { x, top: t, bot: b, sc, room }; }
+  if (!best) { bone = null; return; }
+  const inset = 0.16, len = (best.bot - best.top) * (1 - inset * 2), h = Math.min(len, SH * 0.6), w = Math.min(h * 698 / 1348, (best.room || 30) * 1.6);
+  bone = { x: best.x, cy: (best.top + best.bot) / 2, h, w, broke: false, crack: seamY(best.x) };
+}
+function drawBonePiece(c, X, Y, top, st) {
+  if (!bone || !boneImg.complete) return;
+  const bx0 = X + bone.x - bone.w / 2, by0 = Y + bone.cy - bone.h / 2, cy = Y + bone.crack;
+  c.save(); c.beginPath();
+  // jagged break line across the bone
+  const n = 6; c.moveTo(bx0 - 4, top ? Y - 400 : Y + 900);
+  for (let i = 0; i <= n; i++) c.lineTo(bx0 + bone.w * i / n, cy + (i % 2 ? 5 : -5));
+  c.lineTo(bx0 + bone.w + 4, top ? Y - 400 : Y + 900); c.closePath(); c.clip();
+  if (!bone.broke) { c.restore(); return; }
+  c.translate(X + bone.x, cy); c.rotate((top ? -1 : 1) * st.boneTilt); c.translate(-(X + bone.x), -cy);
+  c.drawImage(boneImg, bx0, by0, bone.w, bone.h); c.restore();
+}
+function makeStrands() { strands = []; for (let x0 = 4; x0 < SW - 4; x0 += 5) { const x = x0 + Math.random() * 4, y = seamY(x), w = 1.2 + Math.pow(Math.random(), 1.8) * 4.2, m = w * 1.2 + 6; if (!inside(x - m, y) || !inside(x + m, y) || !inside(x, y - 5) || !inside(x, y + 5) || Math.random() < 0.15) continue; strands.push({ x, brk: 10 + Math.pow(Math.random(), 1.4) * 180, w, on: true, snapT: 0, shade: 0.5 + Math.random() * 0.25 }); } }
+function band(ax, ay, byy, w, c, stretch, a) { const N = 16, len = byy - ay, L = [], R = []; for (let i = 0; i <= N; i++) { const u = i / N, y = ay + len * u, pinch = Math.pow(Math.sin(Math.PI * u), 0.6), ends = 1 + 0.35 * Math.pow(1 - Math.sin(Math.PI * u), 3); const ww = Math.max(0.3, w * ends * (1 - 0.88 * pinch * stretch)); L.push([ax - ww, y]); R.push([ax + ww, y]); }
+  cx.globalAlpha = a; cx.fillStyle = c; cx.beginPath(); cx.moveTo(L[0][0], L[0][1]); L.forEach((p) => cx.lineTo(p[0], p[1])); for (let i = N; i >= 0; i--) cx.lineTo(R[i][0], R[i][1]); cx.closePath(); cx.fill();
+  cx.globalAlpha = a * 0.3 * (1 - stretch); cx.fillStyle = '#fff'; cx.fillRect(ax - w * 0.2, ay + len * 0.2, Math.max(0.4, w * 0.25 * (1 - stretch)), len * 0.6); cx.globalAlpha = 1; }
+function soak(x, amt) { const i = Math.round(x / 6); for (let k = -3; k <= 3; k++) { const j = i + k; if (j >= 0 && j < wet.length) wet[j] = Math.min(1, wet[j] + amt * (1 - Math.abs(k) / 4)); } }
+function addRun(x, top) { const y = seamY(x) + (top ? -3 : 3); if (!inside(x, y + (top ? -6 : 8))) return; runs.push({ pts: [[x, y]], w: 1.3 + Math.random() * 2, bead: 0, wait: 0.15 + Math.random() * 0.45, max: top ? 0 : 25 + Math.random() * 100, sp: 30 + Math.random() * 45, top, acc: 0, dx: 0, dripped: false }); }
+function growRuns(dt, st, X, Y) { runs.forEach((r) => { if (r.bead < 1) { r.bead = Math.min(1, r.bead + dt / r.wait); return; }
+  if (r.top) { if (!r.dripped) { r.dripped = true; const p = r.pts[0]; drops.push({ x: X + p[0], y: Y - st.d * 0.5 + st.up + p[1] + 3, vx: 0, vy: 20, r: r.w * 0.9 }); } return; }
+  let last = r.pts[r.pts.length - 1]; const len = last[1] - r.pts[0][1]; if (len >= r.max) return; r.acc += r.sp * dt * (1 - len / r.max * 0.6);
+  while (r.acc > 2) { r.acc -= 2; r.dx = r.dx * 0.7 + (Math.random() - 0.5) * 1.2; const nx = last[0] + r.dx, ny = last[1] + 2; if (!inside(nx, ny)) { r.max = 0; break; } r.pts.push([nx, ny]); last = r.pts[r.pts.length - 1]; } }); }
+function drawBlood(c, top) { c.save(); c.globalCompositeOperation = 'source-atop';
+  splats.forEach((p) => { c.fillStyle = p.dark ? '#6e0a0f' : '#930d15'; c.beginPath(); c.ellipse(p.x, p.y, p.rx, p.ry, p.a, 0, 7); c.fill(); });
+  for (let i = 0; i < seam.length; i++) { const v = wet[i]; if (v < 0.02) continue; const p = seam[i]; c.globalAlpha = Math.min(1, v * 1.4); c.fillStyle = '#6e0a0f'; c.beginPath(); c.ellipse(p[0], p[1] + (top ? -1.5 : 1.5), 2 + v * 3, 1 + v * 2.4, 0, 0, 7); c.fill(); } c.globalAlpha = 1;
+  runs.filter((r) => r.top === top).forEach((r) => { const n = r.pts.length, b = r.bead; if (r.top && r.dripped) return;
+    if (n < 2) { const p = r.pts[0]; c.fillStyle = '#9c0f17'; c.beginPath(); c.ellipse(p[0], p[1] + (top ? -1 : 1) * b * r.w * 0.4, Math.max(0, r.w * b * 0.9), Math.max(0, r.w * b * (top ? 1.3 : 1.05)), 0, 0, 7); c.fill(); return; }
+    c.fillStyle = '#860b12'; c.beginPath(); for (let i = 0; i < n; i++) { const ww = r.w * (0.6 + 0.4 * Math.sin(i * 0.7 + r.w)) * (1 - i / n * 0.25); i ? c.lineTo(r.pts[i][0] - ww, r.pts[i][1]) : c.moveTo(r.pts[i][0] - ww, r.pts[i][1]); }
+    for (let i = n - 1; i >= 0; i--) { const ww = r.w * (0.6 + 0.4 * Math.sin(i * 0.7 + r.w)) * (1 - i / n * 0.25); c.lineTo(r.pts[i][0] + ww, r.pts[i][1]); } c.closePath(); c.fill();
+    const h = r.pts[n - 1]; c.fillStyle = '#9c0f17'; c.beginPath(); c.ellipse(h[0], h[1] + r.w * 0.5, r.w * 1.05, r.w * 1.35, 0, 0, 7); c.fill(); }); c.restore(); }
+
+/** Pulled: stretch a half away from the tear (taller, a touch thinner), pinned along the tear itself */
+function stretchAt(st) {
+  const k = st.s || 0; if (Math.abs(k) < 0.001) return;
+  const sy = seamY(MIDX) - SH / 2; // the tear, in the half's centred coordinates
+  cx.translate(0, sy); cx.scale(1 - k * 0.12, 1 + k * 0.35); cx.translate(0, -sy);
+}
+function frame(st, X, Y) {
+  drawRoom();
+  pools.forEach((p) => { cx.fillStyle = '#6d0a0a'; cx.beginPath(); cx.ellipse(p.x, p.y ?? FLOOR, p.r, p.r * 0.2, 0, 0, 7); cx.fill(); });
+  // the stab knocks the whole letter over a little; it rocks back upright (pivots on its middle)
+  cx.save(); cx.translate(X + MIDX, Y + FOOT / 2); cx.rotate(st.tilt || 0); cx.translate(-(X + MIDX), -(Y + FOOT / 2));
+  const d = st.d, ty = Y - d * 0.5 + st.up + st.bt, by = Y + d * 0.5 + st.down + st.bb, jx = (Math.random() - 0.5) * st.shake, jy = (Math.random() - 0.5) * st.shake;
+  if (!st.thrown) strands.forEach((s) => { const sy = seamY(s.x), ax = X + s.x, ay = ty + sy - 3, byy = by + sy + 3, c = shade(col, s.shade);
+    if (s.on) { if (d > 0.5) band(ax, ay, byy, s.w, c, Math.min(1, d / s.brk), 1); }
+    else { const k = s.snapT, L = (byy - ay) * 0.5 * Math.exp(-7 * k) * Math.cos(16 * k); if (k < 1 && L > 0.5) { const a = Math.max(0, 1 - k * 1.2); band(ax, ay, ay + L, s.w * 0.9, c, 0.3, a); band(ax, byy - L, byy, s.w * 0.9, c, 0.3, a); } } });
+  // Top half: letter with sockets painted where the eyes are, then the eyes on top until they pop
+  tx.clearRect(0, 0, SW, SH); tx.save(); clipHalf(tx, true);
+  if (eyes.length && eyes[0].out) { const tmp = mk(); tmp.getContext('2d').putImageData(socketData, 0, 0); tx.drawImage(tmp, 0, 0); } else tx.drawImage(off, 0, 0);
+  tx.restore();
+  if (!(eyes.length && eyes[0].out)) eyeSprites.forEach((e) => { if (e.y > seamY(e.x)) return; const k = 1 + st.bulge * 0.5; tx.drawImage(e.c, e.x - e.w * k / 2 + (Math.random() - 0.5) * st.bulge * 2, e.y - e.h * k / 2, e.w * k, e.h * k); });
+  drawBlood(tx, true);
+  bx.clearRect(0, 0, SW, SH); bx.save(); clipHalf(bx, false);
+  if (eyes.length && eyes[0].out) { const tmp = mk(); tmp.getContext('2d').putImageData(socketData, 0, 0); bx.drawImage(tmp, 0, 0); } else bx.drawImage(off, 0, 0);
+  bx.restore();
+  if (!(eyes.length && eyes[0].out)) eyeSprites.forEach((e) => { if (e.y <= seamY(e.x)) return; const k = 1 + st.bulge * 0.5; bx.drawImage(e.c, e.x - e.w * k / 2 + (Math.random() - 0.5) * st.bulge * 2, e.y - e.h * k / 2, e.w * k, e.h * k); });
+  drawBlood(bx, false);
+  // (behind both halves, so they only show in the gap) bones stay whole: each is fixed in one half and sticks out of its torn edge into the gap
+  if (boneImg.complete) bonesList.forEach((bn) => {
+    // in the same frame as its half (moving and spinning with it), clipped to stick out of the torn edge
+    const hx = X + (bn.low ? (st.bdx || 0) : (st.tdx || 0)) + jx, hy = (bn.low ? by : ty) + jy, rot = bn.low ? (st.thrown ? st.rotB : -st.rot * 0.5) : st.rot;
+    cx.save(); cx.translate(hx + SW / 2, hy + SH / 2); cx.rotate(rot); cx.translate(-SW / 2, -SH / 2);
+    cx.beginPath(); const far = bn.low ? -900 : 900; cx.moveTo(-50, far); seam.forEach((p) => cx.lineTo(p[0], p[1])); cx.lineTo(SW + 50, far); cx.closePath(); cx.clip();
+    drawBones(cx, [bn]); cx.restore(); });
+  // until the halves start to part, the whole letter sits behind them so the seam between them doesn't show
+  if (st.d < 1 && !st.thrown) { cx.save(); cx.translate(X + (st.tdx || 0) + jx + SW / 2, Y + jy + SH / 2); cx.rotate(st.rot || 0); cx.drawImage(off, -SW / 2, -SH / 2); cx.restore(); }
+  cx.save(); cx.translate(X + (st.tdx || 0) + jx + SW / 2, ty + jy + SH / 2); cx.rotate(st.rot); stretchAt(st); cx.drawImage(topC, -SW / 2, -SH / 2); cx.restore();
+
+  cx.save(); cx.translate(X + (st.bdx || 0) + jx + SW / 2, by + jy + SH / 2); cx.rotate(st.thrown ? st.rotB : -st.rot * 0.5); stretchAt(st); cx.drawImage(botC, -SW / 2, -SH / 2); cx.restore();
+  eyes.forEach((e) => { if (!e.out) return; const sx = X + e.sx, sy = (e.low ? by : ty) + e.sy;
+    if (e.attached) { const len = Math.hypot(e.x - sx, e.y - sy), w = Math.max(0.8, 3.4 - len / 45); cx.strokeStyle = '#b8323f'; cx.lineWidth = w; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(sx, sy); cx.quadraticCurveTo((sx + e.x) / 2, (sy + e.y) / 2 + 12, e.x, e.y); cx.stroke(); }
+    if (e.gone) return; cx.save(); cx.translate(e.x, e.y); cx.rotate(e.spin); cx.drawImage(e.sprite.c, -e.sprite.w * 0.75, -e.sprite.h * 0.75, e.sprite.w * 1.5, e.sprite.h * 1.5); cx.restore(); });
+  cx.restore();
+  drops.forEach((b) => { cx.fillStyle = '#a10f16'; cx.beginPath(); cx.ellipse(b.x, b.y, b.r * 0.75, b.r * 1.35, 0, 0, 7); cx.fill(); });
+}
+
+async function rip() {
+  if (run) cancelAnimationFrame(run);
+  if (window._st && window._st.stopStrain && !window._st.thrown) window._st.stopStrain(); // a restart cuts the old strain off
+  col = COLOURS[colSel.value];
+  await loadLetter(letterSel.value);
+  makeSeam(); makeStrands(); bonesList = middleBones().map((b, i) => ({ ...b, low: i % 2 === 0 })); drops = []; pools = []; runs = []; splats = []; eyes = eyeSprites.map(() => ({ out: false }));
+  const [X, Y] = letterAt(); // in the middle of the screen (or where the game shows it)
+  const st = window._st = { d: 0, v: 0, shake: 0, rot: 0, up: 0, down: 0, bt: 0, bb: 0, bv: 0, bulge: 0, boneTilt: 0 }; const total = strands.length || 1;
+  let t0 = performance.now(), last = t0;
+  function step(now) {
+    // dt is never negative: the first frame can be stamped a touch before the rip started
+    const dt = Math.max(0, Math.min(0.04, (now - last) / 1000)); last = now; const t = (now - t0) / 1000, alive = strands.filter((s) => s.on).length;
+    strands.forEach((s) => { if (!s.on) s.snapT += dt * 1.6; });
+    if (st.d > 2) for (let i = 0; i < wet.length; i++) { const nb = ((wet[i - 1] || 0) + (wet[i + 1] || 0)) / 2; wet[i] = Math.min(1, wet[i] + (nb - wet[i]) * dt * 1.5 + dt * 0.06); }
+    st.bv += (-st.bt * 260 - st.bv * 14) * dt; st.bt += st.bv * dt; st.bb = -st.bt;
+    if (!st.pierced) { st.pierced = true; SFX.pierce();
+      // the blade goes in: blood bursts out of the stab wound, spatters the front of the letter and the floor
+      const wx = SW * (0.4 + Math.random() * 0.2), wy = seamY(wx) - 6;
+      st.camT = 0; st.camFx = W / 2; st.camFy = Y + wy; st.kick = 1; st.tiltV = (Math.random() < 0.5 ? -1 : 1) * 2.6; // the camera lunges in on the stab
+      for (let k = 0; k < 46; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = 120 + Math.random() * 420;
+        drops.push({ x: X + wx, y: Y + wy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 1.2 + Math.random() * 2.6 }); }
+      for (let k = 0; k < 28; k++) { const a = Math.random() * 7, d = Math.pow(Math.random(), 1.6) * SW * 0.32, big = Math.random() < 0.25;
+        splats.push({ x: wx + Math.cos(a) * d, y: wy + Math.sin(a) * d * 0.8, rx: big ? 5 + Math.random() * 6 : 1.5 + Math.random() * 3, ry: big ? 4 + Math.random() * 4 : 1.5 + Math.random() * 3, a: a, dark: Math.random() < 0.4 }); }
+      splats.push({ x: wx, y: wy, rx: 9, ry: 7, a: 0, dark: true }); // the wound itself
+      for (let k = 0; k < 3; k++) addRun(wx + (Math.random() - 0.5) * 16, false); }
+    if (t >= 0.2 && !st.stopStrain && !st.thrown) { const p1 = SFX.pull(); st.pullSnd = p1; st.stopStrain = () => p1.stop(); }
+    if (st.pullSnd && !st.thrown) st.pullSnd.tension(1 - alive / total);
+    if (t < 0.25) st.shake = 0.4; else {
+      const pull = 130 + (t - 0.25) * 300, slow = alive > total * 0.4;
+      const acc = pull - alive * 2.6 * Math.min(1, st.d / 12 + 0.2) + (alive === 0 ? 1800 : 0);
+      if (alive === 0) { st.d = Math.min(st.d + 60 * dt, (st.dEnd = st.dEnd || st.d) + 30); } else { st.v = Math.max(0, st.v * 0.84 + acc * dt * (slow ? 0.55 : 2.4)); st.d += st.v * dt * (slow ? 1.2 : 3.6); } // once in two, it stops pulling
+      st.shake = alive ? Math.min(1.2, 0.4 + alive * 0.02) : 0; st.bulge = Math.min(1, st.bulge + (alive ? dt * 0.5 * (1 - alive / total + 0.2) : 0));
+      strands.forEach((s) => { if (s.on && st.d > s.brk) { s.on = false; s.snapT = 0; SFX.snap(Math.min(1.4, 0.5 + s.w / 4)); st.bv += -s.w * 6; soak(s.x, 0.55); addRun(s.x + (Math.random() - 0.5) * 4, false); if (Math.random() < 0.45) addRun(s.x + (Math.random() - 0.5) * 14, true); } });
+      if (alive === 0) {
+        if (eyes.length && !eyes[0].out) { SFX.pop(); setTimeout(SFX.pop, 70); const ty = Y - st.d * 0.5 + st.up; eyeSprites.forEach((sp, i) => { const e = eyes[i]; const low = sp.y > seamY(sp.x), hy = low ? Y + st.d * 0.5 + st.down : ty; Object.assign(e, { out: true, attached: true, low, sprite: sp, sx: sp.x, sy: sp.y, x: X + sp.x, y: hy + sp.y, vx: (sp.x < SW / 2 ? -1 : 1) * (260 + Math.random() * 160), vy: -320 - Math.random() * 140, spin: 0, vs: (Math.random() - 0.5) * 12, cut: 110 + Math.random() * 60 }); for (let k = 0; k < 5; k++) drops.push({ x: X + sp.x, y: ty + sp.y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 160, r: 1.4 + Math.random() * 1.6 }); }); }
+        // ripped apart and flung off the screen, never to return: the top yanked straight up, the
+        // bottom straight down, each with only a little drift and spin
+        if (!st.thrown) { st.thrown = true; if (st.stopStrain) st.stopStrain(); SFX.tear(); const side = Math.random() < 0.5 ? -1 : 1;
+          Object.assign(st, { tvx: side * (60 + Math.random() * 60), tvy: -1300 - Math.random() * 300, tspin: side * (1 + Math.random()),
+            bvx: -side * (50 + Math.random() * 50), bvy: 900 + Math.random() * 300, bspin: -side * (1 + Math.random()), tdx: 0, bdx: 0, rotB: 0 }); }
+        st.tdx += st.tvx * dt; st.up += st.tvy * dt; st.rot += st.tspin * dt; // no gravity on the top: it's gone
+        st.bvy += 1600 * dt; st.bdx += st.bvx * dt; st.down += st.bvy * dt; st.rotB += st.bspin * dt;
+        // (the bottom keeps going, straight down and off the screen)
+      }
+    }
+    const ty = Y - st.d * 0.5 + st.up + st.bt;
+    const byNow = Y + st.d * 0.5 + st.down + st.bb;
+    eyes.forEach((e) => { if (!e.out) return; e.vy += 700 * dt; if (e.attached) { const sx = X + e.sx, sy = (e.low ? byNow : ty) + e.sy, dx = e.x - sx, dy = e.y - sy, len = Math.hypot(dx, dy); if (len > 40) { e.vx -= dx / len * (len - 40) * 7 * dt; e.vy -= dy / len * (len - 40) * 7 * dt; } if (len > e.cut) e.attached = false; }
+      e.x += e.vx * dt; e.y += e.vy * dt; e.spin += e.vs * dt; if (!e.attached && e.y > H + 80) e.gone = true; });
+    growRuns(dt, st, X, Y);
+    drops.forEach((b) => { b.vy += 650 * dt; b.x += b.vx * dt; b.y += b.vy * dt; if (b.land === undefined) b.land = FLOOR + Math.random() * 14 - 2; if (b.y > b.land) { b.dead = 1; /* no pools: blood never lands on the floor */ } }); drops = drops.filter((b) => !b.dead);
+    // Camera: on the stab it zooms in fast on the wound, then eases back out over ~1.6 s with a
+    // shake that dies away. While he's being pulled it shakes with the strain, and hard on the tear.
+    st.camT = (st.camT ?? -1) >= 0 ? st.camT + dt : -1;
+    let zoom = 1, fx = W / 2, fy = H / 2;
+    if (st.camT >= 0) {
+      // in fast on the stab, then out slowly for as long as the pull lasts, and right back out just before it tears
+      const prog = 1 - alive / total, target = alive <= Math.max(2, total * 0.35) || st.thrown ? 1 : 1.45 - 0.25 * prog;
+      if (st.camT < 0.12) st.zoom = 1 + 0.45 * (1 - Math.pow(1 - st.camT / 0.12, 3));
+      else st.zoom += (target - st.zoom) * Math.min(1, dt * (target === 1 ? 9 : 2.5));
+      zoom = st.zoom; fx = st.camFx; fy = st.camFy;
+    }
+    // the knock from the stab: a quick tilt that springs back upright
+    st.tiltV = (st.tiltV || 0) + (-(st.tilt || 0) * 60 - (st.tiltV || 0) * 7) * dt; st.tilt = (st.tilt || 0) + st.tiltV * dt;
+    st.kick = Math.max(0, (st.kick || 0) - dt * 0.9);
+    // the camera rolls with the letter as it's knocked over, a beat behind, and comes back straight with it
+    st.camRot = (st.camRot || 0) + ((st.tilt || 0) - (st.camRot || 0)) * Math.min(1, dt * 8);
+    const strain = st.thrown ? 0 : 1 - alive / total;
+    // how stretched the halves look: follows the strain, and twangs back with a wobble when it tears
+    st.s = st.s || 0; st.sv = st.sv || 0;
+    const pull = st.thrown ? 0 : Math.min(1, st.d / 90); // builds as the halves are pulled apart
+    st.sv += ((pull - st.s) * 220 - st.sv * 9) * dt; st.s += st.sv * dt;
+    if (st.thrown && !st.tearKick) { st.tearKick = true; st.kick = Math.max(st.kick, 1.2); }
+    const shake = 14 * st.kick + 6 * strain * strain;
+    const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
+    cx.setTransform(1, 0, 0, 1, 0, 0); cx.fillStyle = '#0b0507'; cx.fillRect(0, 0, W, H);
+    cx.setTransform(zoom, 0, 0, zoom, fx - fx * zoom + sx, fy - fy * zoom + sy);
+    { const px = X + MIDX, py = Y + FOOT / 2; cx.translate(px, py); cx.rotate(-st.camRot); cx.translate(-px, -py); }
+    frame(st, X, Y);
+    cx.setTransform(1, 0, 0, 1, 0, 0);
+    if (st.thrown) { st.doneAt = st.doneAt ?? t + 2.2; if (t >= st.doneAt) finished(); } // the ghost comes once the halves have landed
+    if (t < 9) run = requestAnimationFrame(step); else { run = null; stopAll(); finished(); }
+  }
+  run = requestAnimationFrame(step);
+}
+/** Dev: every letter on one sheet with its eyes circled and its tear line */
+async function sheet() {
+  if (run) cancelAnimationFrame(run);
+  cv.width = 1300; cv.height = 1200; const c2 = cv.getContext('2d'); c2.fillStyle = '#e9e4d8'; c2.fillRect(0, 0, 1300, 1200);
+  const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'; let i = 0;
+  for (const l of L) { await loadLetter(l); makeSeam(); const k = 0.62, gx = (i % 7) * 185 + 10, gy = Math.floor(i / 7) * 295 + 10;
+    c2.save(); c2.translate(gx, gy); c2.scale(k, k); c2.drawImage(off, 0, 0); eyeSprites.forEach((e) => c2.drawImage(e.c, e.x - e.w / 2, e.y - e.h / 2));
+    c2.strokeStyle = '#e00'; c2.lineWidth = 3; c2.beginPath(); seam.forEach((p, n) => (n ? c2.lineTo(p[0], p[1]) : c2.moveTo(p[0], p[1]))); c2.stroke();
+    c2.strokeStyle = '#0c0'; eyeSprites.forEach((e) => { c2.beginPath(); c2.arc(e.x, e.y, e.w / 2, 0, 7); c2.stroke(); });
+    c2.restore(); c2.fillStyle = '#000'; c2.font = '20px sans-serif'; c2.fillText(l, gx, gy + 18); i++; }
+}
+/**
+ * Bone map: one continuous bone running through the middle of the letter's strokes (its skeleton),
+ * found by thinning the letter's shape down to a 1px line.
+ */
+function boneMap() {
+  const sc = 3, w = Math.ceil(SW / sc), h = Math.ceil(SH / sc), id = ox.getImageData(0, 0, SW, SH).data;
+  const m = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) m[y * w + x] = id[((y * sc + 1) * SW + x * sc + 1) * 4 + 3] > 100 ? 1 : 0;
+  // shave the outline off first so the bone sits inside the stitches, not on the edge
+  for (let pass = 0; pass < 2; pass++) { const c = m.slice(); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (c[i] && (!c[i - 1] || !c[i + 1] || !c[i - w] || !c[i + w])) m[i] = 0; } }
+  // Zhang-Suen thinning
+  const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : m[y * w + x]);
+  let changed = true;
+  while (changed) { changed = false;
+    for (const step of [0, 1]) { const del = [];
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { if (!m[y * w + x]) continue;
+        const P = [at(x, y - 1), at(x + 1, y - 1), at(x + 1, y), at(x + 1, y + 1), at(x, y + 1), at(x - 1, y + 1), at(x - 1, y), at(x - 1, y - 1)];
+        const B = P.reduce((a, b) => a + b, 0); if (B < 2 || B > 6) continue;
+        let A = 0; for (let k = 0; k < 8; k++) if (!P[k] && P[(k + 1) % 8]) A++; if (A !== 1) continue;
+        if (step === 0 ? (P[0] * P[2] * P[4] || P[2] * P[4] * P[6]) : (P[0] * P[2] * P[6] || P[0] * P[4] * P[6])) continue;
+        del.push(y * w + x); }
+      del.forEach((i) => { m[i] = 0; }); if (del.length) changed = true; } }
+  const pts = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (m[y * w + x]) pts.push([x * sc + 1, y * sc + 1]);
+  // prune short spurs (little twigs off the main line) by repeatedly trimming loose ends
+  const key = (p) => p[0] + ',' + p[1], set = new Map(pts.map((p) => [key(p), p]));
+  const nb = (p) => { const r = []; for (let dy = -sc; dy <= sc; dy += sc) for (let dx = -sc; dx <= sc; dx += sc) if ((dx || dy) && set.has((p[0] + dx) + ',' + (p[1] + dy))) r.push(set.get((p[0] + dx) + ',' + (p[1] + dy))); return r; };
+  for (let k = 0; k < 6; k++) [...set.values()].forEach((p) => { if (nb(p).length <= 1 && [...set.values()].length > 20) { let len = 0, q = p, prev = null, path = [p]; while (len < 8) { const n = nb(q).filter((r) => r !== prev); if (n.length !== 1) break; prev = q; q = n[0]; path.push(q); len++; } if (len < 8 && nb(q).length > 2) path.slice(0, -1).forEach((r) => set.delete(key(r))); } });
+  return { set, nb, sc };
+}
+/** Turn the skeleton into straight bones: trace it between ends/junctions, drop short twigs, straighten each run */
+function boneSegments(bm) {
+  const { set, nb } = bm, key = (p) => p[0] + ',' + p[1];
+  const deg = (p) => nb(p).length, nodes = [...set.values()].filter((p) => deg(p) !== 2);
+  const seen = new Set(), paths = [];
+  nodes.forEach((n) => nb(n).forEach((first) => { const ek = key(n) + '>' + key(first); if (seen.has(ek)) return;
+    const path = [n, first]; let prev = n, cur = first;
+    while (deg(cur) === 2) { const nx = nb(cur).find((q) => q !== prev); if (!nx) break; prev = cur; cur = nx; path.push(cur); }
+    seen.add(ek); seen.add(key(cur) + '>' + key(prev)); paths.push(path); }));
+  // twigs: short paths that end loose
+  const minLen = SH * 0.12;
+  const keep = paths.filter((pt) => !((deg(pt[0]) === 1 || deg(pt[pt.length - 1]) === 1) && pt.length * bm.sc < minLen));
+  // straighten (Douglas-Peucker)
+  const dp = (pts, eps) => { if (pts.length < 3) return pts; const [a, b] = [pts[0], pts[pts.length - 1]]; let md = 0, mi = 0;
+    pts.forEach((p, i) => { const d = Math.abs((b[1] - a[1]) * p[0] - (b[0] - a[0]) * p[1] + b[0] * a[1] - b[1] * a[0]) / (Math.hypot(b[0] - a[0], b[1] - a[1]) || 1); if (d > md) { md = d; mi = i; } });
+    return md > eps ? [...dp(pts.slice(0, mi + 1), eps).slice(0, -1), ...dp(pts.slice(mi), eps)] : [a, b]; };
+  const segs = [];
+  keep.forEach((pt) => { const q = dp(pt, SH * 0.035); for (let i = 0; i < q.length - 1; i++) if (Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]) > SH * 0.06) segs.push([q[i], q[i + 1]]); });
+  return segs;
+}
+/**
+ * Bones only where the letter tears: one big bone in each stroke the tear crosses, centred on the
+ * tear and lying along the stroke (direction from the rip.json skeleton, else upright).
+ */
+function middleBones() {
+  const id = ox.getImageData(0, 0, SW, SH).data, solid = (x, y) => x >= 0 && y >= 0 && x < SW && y < SH && id[((y | 0) * SW + (x | 0)) * 4 + 3] > 100;
+  // how far the letter runs straight up and down from the tear at this x
+  const vert = (x) => { const y0 = seamY(x); if (!solid(x, y0)) return 0; let t = y0, b = y0; while (solid(x, t - 1)) t--; while (solid(x, b + 1)) b++; return b - t; };
+  const fixed = (RIP[ripLetter] || {}).boneAt;
+  // does a bone along `dir` through (x, y) stay inside the letter (both edges, most of its length)?
+  const fits = (x, y, dir, len, w) => { for (let t = -0.42; t <= 0.42; t += 0.07) for (const side of [-0.4, 0, 0.4]) { const px = x + dir[0] * len * t - dir[1] * w * side, py = y + dir[1] * len * t + dir[0] * w * side; if (!solid(px, py)) return false; } return true; };
+  if (Array.isArray(fixed)) return fixed.map(([fx, lean, force]) => {
+    // centre it in the stroke it sits in (the stroke's own middle, measured along the tear)
+    let cxp = fx * SW; { const y0 = seamY(cxp); let l = cxp, r = cxp; while (solid(l - 1, y0)) l--; while (solid(r + 1, y0)) r++; if (r - l < SW * 0.42) cxp = (l + r) / 2; }
+    const cyp = seamY(cxp);
+    // straight up if it fits; otherwise lean towards the stroke's own slant, only as far as needed
+    let r = 0; const want = lean * Math.PI / 180;
+    if (force) r = want; else for (let k = 0; k <= 4; k++) { r = want * k / 4; if (fits(cxp, cyp, [Math.sin(r), Math.cos(r)], SH * 0.32, 22)) break; }
+    const dir = [Math.sin(r), Math.cos(r)];
+    let l = cxp, rr = cxp; while (solid(l - 1, cyp)) l--; while (solid(rr + 1, cyp)) rr++;
+    const thick = Math.min(rr - l, SH * 0.3) * Math.cos(r), w = Math.max(SH * 0.1, Math.min(thick * 0.6, SH * 0.15)), len = Math.min(SH * 0.5, Math.max(SH * 0.34, w * 2.8));
+    return { a: [cxp - dir[0] * len / 2, cyp - dir[1] * len / 2], b: [cxp + dir[0] * len / 2, cyp + dir[1] * len / 2], w };
+  });
+  const fitsUp = (x, y) => { for (let t = -0.15; t <= 0.15; t += 0.03) for (const side of [-9, 0, 9]) if (!solid(x + side, y + t * SH)) return false; return true; };
+  const skel = letterBones(), out = [], minV = SH * 0.22;
+  for (let x = 0; x < SW; x++) {
+    if (vert(x) < minV) continue; let r = x; while (r < SW - 1 && vert(r + 1) >= minV) r++;
+    const run = r - x, cxp = (x + r) / 2, cyp = seamY(cxp); x = r;
+    if (run < 10) continue;
+    // the stroke's own direction right here: its centre a little above and a little below the tear
+    // the stroke's own slant right here, from whichever edge runs straight (the other may have an
+    // arm or bowl joining it just above or below the tear)
+    const edgesAt = (y) => { let l = cxp, r = cxp; if (!solid(cxp, y)) return null; while (solid(l - 1, y)) l--; while (solid(r + 1, y)) r++; return [l, r]; };
+    const off = SH * 0.07, ea = edgesAt(cyp - off), eb = edgesAt(cyp + off);
+    let dir = [0, 1];
+    if (ea && eb) { const dl = eb[0] - ea[0], dr = eb[1] - ea[1], vx = Math.abs(dl) < Math.abs(dr) ? dl : dr, vy = off * 2, L = Math.hypot(vx, vy); dir = [vx / L, vy / L]; }
+    if (Math.abs(dir[0]) < 0.17 || fitsUp(cxp, cyp)) dir = [0, 1]; // upright whenever it fits
+    if (Math.abs(dir[1]) < 0.5) dir = [0, 1];
+    const thick = run * Math.abs(dir[1]), w = Math.max(SH * 0.1, Math.min(thick * 0.6, SH * 0.15));
+    const len = Math.min(SH * 0.55, Math.max(SH * 0.32, w * 3));
+    out.push({ a: [cxp - dir[0] * len / 2, cyp - dir[1] * len / 2], b: [cxp + dir[0] * len / 2, cyp + dir[1] * len / 2], w });
+  }
+  return out;
+}
+/** The hand-placed skeleton from rip.json, in pixels */
+function letterBones() { return ((RIP[ripLetter] || {}).bones || []).map(([x1, y1, x2, y2]) => [[x1 * SW, y1 * SH], [x2 * SW, y2 * SH]]); }
+/** The bone art, whitened once. Knobs are the top 0-444 and bottom 964-1348 of the 698x1348 SVG; the shaft between is straight */
+let boneWhite = null;
+function whiteBone() {
+  if (boneWhite || !boneImg.complete) return boneWhite;
+  boneWhite = document.createElement('canvas'); boneWhite.width = 698; boneWhite.height = 1348;
+  const g = boneWhite.getContext('2d'); g.filter = 'saturate(0.85) brightness(1.1)'; g.drawImage(boneImg, 0, 0, 698, 1348); return boneWhite;
+}
+/** Draw a bone from a to b at width w: the knobs keep their shape, only the shaft gets longer (never stretched) */
+function drawBones(c2, segs) {
+  const img = whiteBone(); if (!img) return;
+  segs.forEach((sg) => { const [a, b] = sg.a ? [sg.a, sg.b] : sg; const len = Math.hypot(b[0] - a[0], b[1] - a[1]), w = sg.w || SH * 0.07;
+    const k = w / 698, topH = 444 * k, botH = 384 * k, mid = Math.max(0, len - topH - botH), h = topH + mid + botH;
+    c2.save(); c2.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2); c2.rotate(Math.atan2(b[1] - a[1], b[0] - a[0]) - Math.PI / 2);
+    c2.drawImage(img, 0, 0, 698, 444, -w / 2, -h / 2, w, topH);
+    if (mid > 0) c2.drawImage(img, 0, 444, 698, 520, -w / 2, -h / 2 + topH - 0.5, w, mid + 1);
+    c2.drawImage(img, 0, 964, 698, 384, -w / 2, -h / 2 + topH + mid, w, botH);
+    c2.restore(); });
+}
+async function boneSheet() {
+  if (run) cancelAnimationFrame(run);
+  cv.width = 1300; cv.height = 1200; const c2 = cv.getContext('2d'); c2.fillStyle = '#e9e4d8'; c2.fillRect(0, 0, 1300, 1200);
+  let i = 0;
+  for (const l of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') { await loadLetter(l); const k = 0.62, gx = (i % 7) * 185 + 10, gy = Math.floor(i / 7) * 295 + 10;
+    c2.save(); c2.translate(gx, gy); c2.scale(k, k); c2.globalAlpha = 0.35; c2.drawImage(off, 0, 0); c2.globalAlpha = 1; makeSeam(); drawBones(c2, middleBones()); c2.strokeStyle = 'rgba(220,0,0,.5)'; c2.lineWidth = 2; c2.beginPath(); seam.forEach((p, n) => (n ? c2.lineTo(p[0], p[1]) : c2.moveTo(p[0], p[1]))); c2.stroke(); c2.restore();
+    c2.fillStyle = '#000'; c2.font = '20px sans-serif'; c2.fillText(l, gx, gy + 18); i++; }
+}
+document.getElementById('go').onclick = () => { if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } stopAll(); rip(); }; // resizing wipes the canvas, so only when it changed
+// Burn: the letter (tinted, as the game shows it) burns, and its ash blows away
+async function burn() {
+  if (run) cancelAnimationFrame(run);
+  stopAll();
+  col = COLOURS[colSel.value];
+  await loadLetter(letterSel.value);
+  const X = W / 2 - MIDX, Y = H / 2 - FOOT / 2; // where the page shows it
+  const fx = makeBurn(off, { below: H - (Y + SH) }); // fire starts at the bottom of the screen
+  let last = performance.now();
+  function step(now) {
+    fx.step(Math.min(0.05, (now - last) / 1000)); last = now;
+    // camera: zoom on the letter's middle, with a little shake
+    const z = fx.zoom || 1, mx = W / 2, my = Y + FOOT / 2;
+    cx.save(); cx.translate(mx + (fx.camJx || 0), my + (fx.camJy || 0)); cx.scale(z, z); cx.translate(-mx, -my);
+    drawRoom(); fx.draw(cx, X, Y);
+    cx.restore();
+    if (!fx.done) run = requestAnimationFrame(step);
+  }
+  run = requestAnimationFrame(step);
+}
+// Electrocute: lightning from the top of the screen, with x-ray frames of the letter's skeleton
+async function shock() {
+  if (run) cancelAnimationFrame(run);
+  stopAll();
+  col = COLOURS[colSel.value];
+  await loadLetter(letterSel.value);
+  makeSeam();
+  const bones = mk(), segs = letterBones();
+  drawBones(bones.getContext('2d'), segs.length ? segs : middleBones());
+  const [X, Y] = letterAt();
+  const fx = makeShock(off, { above: Y, bones });
+  let last = performance.now();
+  function step(now) {
+    fx.step(Math.min(0.05, (now - last) / 1000)); last = now;
+    const z = fx.zoom, mx = W / 2, my = Y + FOOT / 2;
+    cx.save(); cx.translate(mx + fx.camJx, my + fx.camJy); cx.scale(z, z); cx.translate(-mx, -my);
+    drawRoom(); fx.draw(cx, X, Y);
+    cx.restore();
+    if (fx.flash > 0) { cx.fillStyle = `rgba(220,240,255,${fx.flash * 0.6})`; cx.fillRect(0, 0, W, H); }
+    if (!fx.done) run = requestAnimationFrame(step);
+  }
+  run = requestAnimationFrame(step);
+}
+/**
+ * Chop: a blade slices the letter from the bottom up, evenly, each slice tilted the other way to the last,
+ * faster each time. Every slice that's cut off drops and hangs from the stringy tendrils over its cut
+ * (the same as the rip's), swinging and stretching them until they snap. Then the rest lets go and the
+ * whole dangling chain falls off the screen.
+ */
+async function chop() {
+  if (run) cancelAnimationFrame(run);
+  stopAll();
+  col = COLOURS[colSel.value];
+  await loadLetter(letterSel.value);
+  const [X, Y] = letterAt();
+  const src = ox.getImageData(0, 0, SW, SH), A = src.data;
+  const alphaAt = (x, y) => (x >= 0 && y >= 0 && x < SW && y < SH ? A[((y | 0) * SW + (x | 0)) * 4 + 3] : 0);
+
+  // The drawing's bounds, for placing the cuts
+  let bl = SW, br = 0, bt = SH, bb = 0;
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) if (A[(y * SW + x) * 4 + 3] > 100) { bl = Math.min(bl, x); br = Math.max(br, x); bt = Math.min(bt, y); bb = Math.max(bb, y); }
+
+  // The cuts: evenly spaced slices from the bottom up, each tilted a little the other way to the last
+  const cuts = [], n = 6, flip = Math.random() < 0.5 ? 1 : -1, JD = Math.ceil(Math.hypot(SW, SH)), JN = JD; // jag samples every 2px along ±JD
+  for (let k = 0; k < n; k++) {
+    const ang = (k % 2 ? 1 : -1) * flip * (0.09 + Math.random() * 0.07);
+    const dx = Math.cos(ang), dy = Math.sin(ang); // the normal (-dy, dx) points down: side 1 is below the cut
+    // a ragged edge: a jittery walk along the cut, with the odd chunk torn out one way or the other
+    const jag = [];
+    for (let i = 0, v = 0; i <= JN; i++) { v = Math.max(-7, Math.min(7, v * 0.65 + (Math.random() - 0.5) * 7)); jag.push(v + (Math.random() < 0.08 ? (Math.random() - 0.5) * 16 : 0)); }
+    cuts.push({ px: (bl + br) / 2, py: bb - (k + 1) * (bb - bt) / (n + 1), dx, dy, nx: -dy, ny: dx, jag });
+  }
+  const jagAt = (c, u) => { const f = Math.max(0, Math.min(JN - 1e-6, (u + JD) / 2)), i = f | 0; return c.jag[i] + (c.jag[i + 1] - c.jag[i]) * (f - i); };
+  const side = (c, x, y) => { const u = (x - c.px) * c.dx + (y - c.py) * c.dy; return (x - c.px) * c.nx + (y - c.py) * c.ny - jagAt(c, u) > 0 ? 1 : 0; };
+
+  // Pieces: connected areas on the same side of every cut
+  const lab = new Int32Array(SW * SH).fill(-1), sigOf = new Int32Array(SW * SH), pieces = [];
+  for (let i = 0; i < SW * SH; i++) if (A[i * 4 + 3]) { const x = i % SW, y = i / SW | 0; let sg = 0; cuts.forEach((c, k) => { sg |= side(c, x, y) << k; }); sigOf[i] = sg; }
+  for (let i = 0; i < SW * SH; i++) {
+    if (!A[i * 4 + 3] || lab[i] >= 0) continue;
+    const id = pieces.length, sg = sigOf[i], stack = [i], px = [];
+    lab[i] = id;
+    while (stack.length) {
+      const j = stack.pop(); px.push(j);
+      const x = j % SW, y = j / SW | 0;
+      for (const q of [x > 0 ? j - 1 : -1, x < SW - 1 ? j + 1 : -1, y > 0 ? j - SW : -1, y < SH - 1 ? j + SW : -1]) if (q >= 0 && lab[q] < 0 && A[q * 4 + 3] && sigOf[q] === sg) { lab[q] = id; stack.push(q); }
+    }
+    let x0 = SW, x1 = 0, y0 = SH, y1 = 0, sx = 0, sy = 0;
+    for (const j of px) { const x = j % SW, y = j / SW | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); sx += x; sy += y; }
+    const can = document.createElement('canvas'); can.width = x1 - x0 + 1; can.height = y1 - y0 + 1;
+    const pc = can.getContext('2d'), im = pc.createImageData(can.width, can.height);
+    for (const j of px) { const x = j % SW, y = j / SW | 0, o = ((y - y0) * can.width + (x - x0)) * 4; for (let c = 0; c < 4; c++) im.data[o + c] = A[j * 4 + c]; }
+    pc.putImageData(im, 0, 0);
+    const m = px.length, bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    pieces.push({ sig: sg, can, pc, x0, y0, x1, y1, cx: sx / m, cy: sy / m, x: 0, y: 0, vx: 0, vy: 0, rot: 0, vr: 0, m, I: m * (bw * bw + bh * bh) / 12, free: false });
+  }
+  // Everything not yet cut loose is drawn as one image, so the cuts still to come don't show as seams
+  const whole = mk(), wctx = whole.getContext('2d');
+  const rebuildWhole = () => { wctx.clearRect(0, 0, SW, SH); pieces.forEach((p) => { if (!p.free) wctx.drawImage(p.can, p.x0, p.y0); }); };
+  rebuildWhole();
+  const world = (p, x, y) => { const dx = x - p.cx, dy = y - p.cy, c = Math.cos(p.rot), s = Math.sin(p.rot); return [p.cx + p.x + dx * c - dy * s, p.cy + p.y + dx * s + dy * c]; };
+  const pieceAt = (x, y) => (alphaAt(x, y) > 60 ? lab[(y | 0) * SW + (x | 0)] : -1);
+
+  const tendrils = [], swipes = [], gore = [];
+  let lastSnap = 0, roll = 0, rollV = 0, hitstop = 0, camY = null, camYTo = null, zoomTo = 1, zoomNow = 1;
+  let recX = 0, recY = 0, recVX = 0, recVY = 0; // the camera's recoil: a spring knocked by each blow
+  const diag = Math.hypot(SW, SH);
+  const cutTimes = []; { let tt = 0.5, gap = 0.5; cuts.forEach(() => { cutTimes.push(tt); tt += gap; gap = Math.max(0.16, gap * 0.82); }); }
+  const tFall = cutTimes[cutTimes.length - 1] + 0.05; // the rest lets go as soon as the last slice is cut
+  const G = 1500;
+  let nextCut = 0, fell = false, t = 0, last = performance.now();
+
+  function doCut(k) {
+    const c = cuts[k];
+    // everything below the cut is now free to fall, hanging from the tendrils over it; the blade knocks it along a touch
+    const dir = swipes.length % 2 ? 1 : -1;
+    pieces.forEach((p) => { if (p.sig >> k & 1 && !p.free) { p.free = true; p.vx += c.dx * dir * 25; } });
+    const fresh = [];
+    // tendrils over the gap, where the drawing is solid on both sides
+    for (let d = -diag; d < diag; d += 4 + Math.random() * 4) {
+      const j = jagAt(c, d), qx = c.px + c.dx * d + c.nx * j, qy = c.py + c.dy * d + c.ny * j;
+      const a = pieceAt(qx + c.nx * 3, qy + c.ny * 3), b = pieceAt(qx - c.nx * 3, qy - c.ny * 3);
+      if (a < 0 || b < 0 || a === b || Math.random() < 0.2) continue;
+      const td = { a: pieces[a], b: pieces[b], ax: qx + c.nx * 1.5, ay: qy + c.ny * 1.5, bx: qx - c.nx * 1.5, by: qy - c.ny * 1.5,
+        w: 1 + Math.pow(Math.random(), 1.8) * 3.5, brk: 6 + Math.pow(Math.random(), 1.4) * 45, on: true, snapT: 0, shade: 0.5 + Math.random() * 0.25, dieAt: t + 0.4 + Math.random() * 1.2 }; // every tendril snaps by then at the latest
+      tendrils.push(td); fresh.push(td);
+      if (Math.random() < 0.25) { const v = 80 + Math.random() * 260, sgn = Math.random() < 0.5 ? 1 : -1; // a spurt of blood from the cut
+        gore.push({ x: X + qx, y: Y + qy, vx: c.nx * v * sgn + (Math.random() - 0.5) * 80, vy: c.ny * v * sgn - 60 - Math.random() * 120, r: 1.2 + Math.random() * 2.4 }); }
+    }
+    // Stiffness: together the new tendrils just about hold up everything hanging below them at first,
+    // so it sags, the weakest snap, the rest take the load, and so on until it tears away
+    const hanging = pieces.reduce((sum, p) => sum + (p.free ? p.m : 0), 0), hold = fresh.reduce((sum, td) => sum + td.w * td.brk * 0.5, 0) || 1;
+    fresh.forEach((td) => { td.k = 1.25 * hanging * G / hold * td.w; td.c = td.k * 0.08; });
+    // blood along both cut edges
+    pieces.forEach((p) => { const g = p.pc; g.save(); g.globalCompositeOperation = 'source-atop'; g.translate(-p.x0, -p.y0);
+      g.beginPath(); for (let d = -diag; d <= diag; d += 2) { const j = jagAt(c, d), x = c.px + c.dx * d + c.nx * j, y = c.py + c.dy * d + c.ny * j; d === -diag ? g.moveTo(x, y) : g.lineTo(x, y); }
+      g.strokeStyle = 'rgba(110,10,15,0.9)'; g.lineWidth = 4; g.stroke(); g.strokeStyle = '#a3121b'; g.lineWidth = 1.5; g.stroke(); g.restore(); });
+    swipes.push({ c, life: 0, dir: Math.random() < 0.5 ? 1 : -1 });
+    // each blow knocks the camera the way the blade went (a spring, so it overshoots once and settles),
+    // rolls it the same way, freezes for a split second, and the zoom tightens a notch
+    recVX += c.dx * dir * 900; recVY += c.dy * dir * 900 + 300; rollV += dir * 1.2; hitstop = 0.07;
+    camYTo = Y + c.py; zoomTo = 1.1 + 0.07 * (k + 1);
+    // the rip's stab burst, on every cut: blood sprays out of the middle of the cut and spatters the letter
+    let mxs = 0, mys = 0, nm = 0;
+    for (let d = -diag; d < diag; d += 3) { const qx = c.px + c.dx * d, qy = c.py + c.dy * d; if (alphaAt(qx, qy) > 100) { mxs += qx; mys += qy; nm++; } }
+    if (nm) {
+      const wx = mxs / nm + c.dx * (Math.random() - 0.5) * 30, wy = mys / nm + c.dy * (Math.random() - 0.5) * 30;
+      for (let n = 0; n < 46; n++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = 120 + Math.random() * 420;
+        gore.push({ x: X + wx, y: Y + wy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 1.2 + Math.random() * 2.6 }); }
+      const spl = [];
+      for (let n = 0; n < 28; n++) { const a = Math.random() * 7, d = Math.pow(Math.random(), 1.6) * SW * 0.32, big = Math.random() < 0.25;
+        spl.push({ x: wx + Math.cos(a) * d, y: wy + Math.sin(a) * d * 0.8, rx: big ? 5 + Math.random() * 6 : 1.5 + Math.random() * 3, ry: big ? 4 + Math.random() * 4 : 1.5 + Math.random() * 3, a, dark: Math.random() < 0.4 }); }
+      // painted onto whichever pieces they land on (each piece's canvas is in the letter's original coordinates, minus its corner)
+      pieces.forEach((p) => { const g = p.pc; g.save(); g.globalCompositeOperation = 'source-atop'; g.translate(-p.x0, -p.y0);
+        spl.forEach((q) => { g.fillStyle = q.dark ? '#6e0a0f' : '#930d15'; g.beginPath(); g.ellipse(q.x, q.y, q.rx, q.ry, q.a, 0, 7); g.fill(); }); g.restore(); });
+    }
+    rebuildWhole();
+    // the gruesome bit, loud: the blade going in, a wet squelch and a chunk of guts
+    playBuf('pierce', { vol: 1.6, rate: 1 + Math.random() * 0.25, dur: 0.6, fade: 0.15 });
+    playBuf('squelch', { vol: 1.3, rate: 0.9 + Math.random() * 0.3, dur: 0.5, fade: 0.15 });
+    SFX.gutsBit(2);
+  }
+
+  function step(now) {
+    let dt = Math.max(0, Math.min(0.04, (now - last) / 1000)); last = now;
+    const rdt = dt; // the camera keeps moving through a freeze
+    if (hitstop > 0) { hitstop -= dt; dt = 0; } // frozen on the hit
+    t += dt;
+    while (nextCut < cuts.length && t >= cutTimes[nextCut]) doCut(nextCut++);
+    // straight back to normal just after the last cut, before the rest lets go
+    if (nextCut === cuts.length && t >= cutTimes[cuts.length - 1] + 0.3) { zoomTo = 1; camYTo = Y + FOOT / 2; }
+    if (!fell && t >= tFall) { fell = true; SFX.tear(); hitstop = 0.1; zoomTo = 1; camYTo = Y + FOOT / 2; /* the camera settles back to straight and lets it fall out of shot */ const top = new Set(pieces.filter((p) => !p.free)); pieces.forEach((p) => { if (!p.free) { p.vy = -750 - Math.random() * 100; p.vr = (Math.random() - 0.5) * 1.5; } p.free = true; }); rebuildWhole(); /* the top pops up and its strings snap at once, so the chain below can't drag it down */ tendrils.forEach((s) => { s.dieAt = Math.min(s.dieAt, top.has(s.a) || top.has(s.b) ? t + Math.random() * 0.06 : t + Math.random() * 0.6); }); }
+    // Free pieces fall, pulled on by their tendrils (springs between anchor points, which snap when overstretched)
+    for (let sub = 0; sub < 4; sub++) {
+      const h = dt / 4;
+      pieces.forEach((p) => { p.fx = 0; p.fy = p.m * G; p.tq = 0; });
+      tendrils.forEach((s) => {
+        if (!s.on) return;
+        const [ax, ay] = world(s.a, s.ax, s.ay), [bx, by] = world(s.b, s.bx, s.by), len = Math.hypot(bx - ax, by - ay);
+        if (len > s.brk || t >= s.dieAt) { s.on = false; s.len = len; if (t - lastSnap > 0.05) { lastSnap = t; SFX.snap(Math.min(1, s.w / 3)); } return; }
+        if (len < 3 || (!s.a.free && !s.b.free)) return;
+        const ux = (bx - ax) / len, uy = (by - ay) / len;
+        const pa = s.a, pb = s.b, rax = ax - (pa.cx + pa.x), ray = ay - (pa.cy + pa.y), rbx = bx - (pb.cx + pb.x), rby = by - (pb.cy + pb.y);
+        const rel = ((pb.vx - pb.vr * rby) - (pa.vx - pa.vr * ray)) * ux + ((pb.vy + pb.vr * rbx) - (pa.vy + pa.vr * rax)) * uy;
+        const f = Math.max(0, s.k * (len - 3) + s.c * rel), Fx = f * ux, Fy = f * uy;
+        pa.fx += Fx; pa.fy += Fy; pa.tq += rax * Fy - ray * Fx;
+        pb.fx -= Fx; pb.fy -= Fy; pb.tq -= rbx * Fy - rby * Fx;
+      });
+      pieces.forEach((p) => {
+        if (!p.free) return;
+        p.vx += p.fx / p.m * h; p.vy += p.fy / p.m * h; p.vr += p.tq / p.I * h;
+        p.vr *= Math.exp(-1.5 * h); p.vx *= Math.exp(-0.4 * h);
+        p.x += p.vx * h; p.y += p.vy * h; p.rot += p.vr * h;
+      });
+    }
+    tendrils.forEach((s) => { if (!s.on) s.snapT += dt * 1.6; });
+    gore.forEach((b) => { b.vy += 900 * dt; b.x += b.vx * dt; b.y += b.vy * dt; });
+    swipes.forEach((w) => { w.life += dt; });
+    recVX += (-recX * 160 - recVX * 14) * rdt; recX += recVX * rdt;
+    recVY += (-recY * 160 - recVY * 14) * rdt; recY += recVY * rdt;
+    rollV += (-roll * 90 - rollV * 12) * rdt; roll += rollV * rdt;
+    zoomNow += (zoomTo - zoomNow) * Math.min(1, rdt * 5);
+    if (camY === null) camY = camYTo = Y + FOOT / 2;
+    camY += (camYTo - camY) * Math.min(1, rdt * 4);
+
+    // draw, through the camera: zoomed a notch per cut, knocked by each blow, rolled, looking at camY
+    const z = zoomNow, mx = W / 2, my = Y + FOOT / 2, jx = recX, jy = recY;
+    cx.fillStyle = '#0b0507'; cx.fillRect(0, 0, W, H); // behind the room, if a roll or pan shows past its edge
+    // camY is the height the camera looks at: the latest cut, then down after the fall
+    cx.save(); cx.translate(mx + jx, my + jy); cx.scale(z, z); cx.rotate(roll); cx.translate(-mx, -camY);
+    drawRoom();
+    tendrils.forEach((s) => {
+      const [ax, ay] = world(s.a, s.ax, s.ay), [bx, by] = world(s.b, s.bx, s.by), len = Math.hypot(bx - ax, by - ay), ang = Math.atan2(by - ay, bx - ax) - Math.PI / 2, c = shade(col, s.shade);
+      if (s.on) { if (len < 0.5) return; cx.save(); cx.translate(X + ax, Y + ay); cx.rotate(ang); band(0, 0, len, s.w, c, Math.min(1, len / s.brk), 1); cx.restore(); return; }
+      const k = s.snapT, L = s.len * 0.5 * Math.exp(-7 * k) * Math.cos(16 * k); if (k >= 1 || L <= 0.5) return; const a = Math.max(0, 1 - k * 1.2);
+      cx.save(); cx.translate(X + ax, Y + ay); cx.rotate(ang); band(0, 0, L, s.w * 0.9, c, 0.3, a); cx.restore();
+      cx.save(); cx.translate(X + bx, Y + by); cx.rotate(ang + Math.PI); band(0, 0, L, s.w * 0.9, c, 0.3, a); cx.restore();
+    });
+    cx.drawImage(whole, X, Y);
+    pieces.forEach((p) => { if (!p.free) return; cx.save(); cx.translate(X + p.cx + p.x, Y + p.cy + p.y); cx.rotate(p.rot); cx.drawImage(p.can, p.x0 - p.cx, p.y0 - p.cy); cx.restore(); });
+    // the blade: a bright streak drawn across in a flash
+    swipes.forEach((w) => { if (w.life > 0.18) return; const c = w.c, u = Math.min(1, w.life / 0.07), L = diag * 0.8, a = 1 - w.life / 0.18;
+      const sx = X + c.px - c.dx * L * w.dir, sy = Y + c.py - c.dy * L * w.dir, ex = sx + c.dx * 2 * L * u * w.dir, ey = sy + c.dy * 2 * L * u * w.dir;
+      cx.lineCap = 'round'; cx.strokeStyle = `rgba(255,255,255,${a * 0.25})`; cx.lineWidth = 12; cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(ex, ey); cx.stroke();
+      cx.strokeStyle = `rgba(255,255,255,${a})`; cx.lineWidth = 2.5; cx.stroke(); });
+    gore.forEach((b) => { cx.fillStyle = '#a10f16'; cx.beginPath(); cx.ellipse(b.x, b.y, b.r * 0.75, b.r * 1.35, 0, 0, 7); cx.fill(); });
+    cx.restore();
+    // until every piece has dropped off the bottom of the screen
+    if (fell && t > tFall + 1.8) finished(); // most of it has dropped out of shot
+    if (!fell || pieces.some((p) => Y + p.cy + p.y - Math.hypot(p.x1 - p.x0, p.y1 - p.y0) < H)) run = requestAnimationFrame(step); else finished();
+  }
+  run = requestAnimationFrame(step);
+}
+/**
+ * Balloon: the letter is pumped up three times, each puff blowing it up a step, its outline pushing
+ * out all round like a puffy sticker (its own pixels, warped). It strains and trembles at full size, then bursts: chunks of
+ * it fly out in every direction and off screen, blood sprays everywhere and splatters the wall.
+ */
+async function balloon() {
+  if (run) cancelAnimationFrame(run);
+  stopAll();
+  col = COLOURS[colSel.value];
+  await loadLetter(letterSel.value);
+  const [X, Y] = letterAt();
+  const A = ox.getImageData(0, 0, SW, SH).data;
+
+  // Its middle and rough radius
+  let sx = 0, sy = 0, sn = 0;
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) if (A[(y * SW + x) * 4 + 3] > 100) { sx += x; sy += y; sn++; }
+  const cx0 = sx / sn, cy0 = sy / sn;
+  let rs = 0; for (let y = 0; y < SH; y += 2) for (let x = 0; x < SW; x += 2) if (A[(y * SW + x) * 4 + 3] > 100) rs += Math.hypot(x - cx0, y - cy0);
+  const Rc = rs / (sn / 4) * 1.5;
+
+  // Inflating pushes every part of the outline outwards, square to itself, like a puffy sticker being
+  // blown up. A heavily blurred copy of its shape gives, at every point, which way is "inwards"
+  // (and how close an edge is); each pixel of the output takes its colour from a little way inwards.
+  const PAD = Math.ceil(Rc * 0.5), D = Math.ceil(Math.max(SW, SH) + PAD * 2), B = D;
+  const ox0 = Math.round(D / 2 - cx0), oy0 = Math.round(D / 2 - cy0);
+  const S4 = 4, LW = Math.ceil(D / S4) + 2; // the blurred shape, at quarter resolution
+  let field = new Float32Array(LW * LW);
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) { const a0 = A[(y * SW + x) * 4 + 3]; if (a0) field[((y + oy0) / S4 | 0) * LW + ((x + ox0) / S4 | 0)] += a0 / 255 / (S4 * S4); }
+  for (let pass = 0; pass < 3; pass++) for (const horiz of [true, false]) { // box blur three times ≈ a smooth gaussian
+    const R6 = 5, nf = new Float32Array(LW * LW);
+    for (let y = 0; y < LW; y++) for (let x = 0; x < LW; x++) { let t = 0; for (let k = -R6; k <= R6; k++) { const xx = horiz ? x + k : x, yy = horiz ? y : y + k; if (xx >= 0 && yy >= 0 && xx < LW && yy < LW) t += field[yy * LW + xx]; } nf[y * LW + x] = t / (R6 * 2 + 1); }
+    field = nf; }
+  const fAt = (x, y) => { x = Math.max(0, Math.min(LW - 1.001, x)); y = Math.max(0, Math.min(LW - 1.001, y)); const i0 = x | 0, j0 = y | 0, u = x - i0, v = y - j0, k = j0 * LW + i0;
+    return field[k] * (1 - u) * (1 - v) + field[k + 1] * u * (1 - v) + field[k + LW] * (1 - u) * v + field[k + LW + 1] * u * v; };
+  const dirX = new Float32Array(D * D), dirY = new Float32Array(D * D); // inwards, strongest near edges
+  let gmax = 0;
+  for (let y = 0; y < D; y++) for (let x = 0; x < D; x++) { const fx = x / S4, fy = y / S4, gx = fAt(fx + 0.5, fy) - fAt(fx - 0.5, fy), gy = fAt(fx, fy + 0.5) - fAt(fx, fy - 0.5);
+    dirX[y * D + x] = gx; dirY[y * D + x] = gy; gmax = Math.max(gmax, Math.hypot(gx, gy)); }
+  for (let i = 0; i < D * D; i++) { const m = Math.hypot(dirX[i], dirY[i]); if (!m) continue; const w = Math.min(1, m / (gmax * 0.35)); dirX[i] = dirX[i] / m * w; dirY[i] = dirY[i] / m * w; }
+
+  const buf = document.createElement('canvas'); buf.width = buf.height = D;
+  const bctx = buf.getContext('2d'), img = bctx.createImageData(D, D), out = img.data;
+  function render(a) {
+    const d = a * Rc * 0.15; // how far the outline has pushed out
+    for (let y = 0; y < D; y++) for (let x = 0; x < D; x++) {
+      // walk inwards in a few small steps, re-reading the direction each time, so paths meeting in the
+      // middle of a stroke stop there instead of crossing over (which mirrors the art)
+      const i = y * D + x, o = i * 4; let qx = x, qy = y;
+      for (let st = 0; st < 4; st++) { const j = (qy + 0.5 | 0) * D + (qx + 0.5 | 0); if (j < 0 || j >= D * D) break; qx += dirX[j] * d / 4; qy += dirY[j] * d / 4; }
+      const px = qx - ox0 | 0, py = qy - oy0 | 0;
+      if (px < 0 || py < 0 || px >= SW || py >= SH) { out[o + 3] = 0; continue; }
+      const q = (py * SW + px) * 4;
+      out[o] = A[q]; out[o + 1] = A[q + 1]; out[o + 2] = A[q + 2]; out[o + 3] = A[q + 3];
+    }
+    bctx.putImageData(img, 0, 0);
+  }
+
+  // Three pumps, each a quick puff that blows it up a step (harder each time, so a little slower),
+  // then it strains at full size for a moment and bursts
+  // each pump lasts as long as its stroke in balloon-pump.mp3 (`at`: where that stroke starts in the file)
+  const PUMPS = [{ t: 0.6, to: 0.4, dur: 0.84, at: 1.27 }, { t: 1.8, to: 0.72, dur: 0.82, at: 2.34 }, { t: 3.0, to: 1, dur: 0.99, at: 3.48 }];
+  const T1 = 4.0, tPop = 4.6, GMAX = 1.07;
+  let t = 0, last = performance.now(), popped = false, pumped = 0, rubbed = false;
+  let a = 0, av = 0, g = 1, gv = 0, aTo = 0, gTo = 1;
+  let zoomNow = 1, zoomTo = 1, recY = 0, recVY = 0, roll = 0, rollV = 0, flash = 0, hitstop = 0;
+  const wall = document.createElement('canvas'); wall.width = W; wall.height = H; const wctx = wall.getContext('2d');
+  const chunks = [], spray = [];
+  const CX = X + cx0, CY = Y + cy0;
+
+  function pop() {
+    popped = true; hitstop = 0.08; flash = 1; recVY += 500; rollV += (Math.random() < 0.5 ? -1 : 1) * 0.8;
+    playBuf('balloon-pop', { vol: 0.9 });
+    playBuf('pierce', { vol: 1.6, rate: 0.8, dur: 0.6, fade: 0.2 });
+    playBuf('squelch', { vol: 1.6, rate: 0.85, dur: 1, fade: 0.3 });
+    playBuf('guts', { vol: 2, dur: 1.5, fade: 0.4 });
+    // The skin rips open from one point on its edge and the tear runs round: it splits into ragged strips
+    // fanning out from the middle (like a burst balloon's shreds), each released a moment after the tear reaches it
+    const rip0 = Math.random() * Math.PI * 2, NS = 16;
+    const src = bctx.getImageData(0, 0, B, B).data, owner = new Int16Array(B * B).fill(-1), bbox = Array.from({ length: NS }, () => [B, B, 0, 0]);
+    for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) { if (src[(y * B + x) * 4 + 3] < 30) continue;
+      const vx = x - B / 2, vy = y - B / 2, r = Math.hypot(vx, vy);
+      let q = (Math.atan2(vy, vx) - rip0) / (Math.PI * 2); q = (q % 1 + 1) % 1;
+      q += Math.sin(r * 0.08 + q * 40) * 0.012; // ragged tear lines between strips
+      const k = ((q * NS | 0) % NS + NS) % NS;
+      owner[y * B + x] = k; const bb = bbox[k]; bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); }
+    bbox.forEach(([x0, y0, x1, y1], k) => { if (x1 < x0) return;
+      const c = document.createElement('canvas'); c.width = x1 - x0 + 1; c.height = y1 - y0 + 1; const cc = c.getContext('2d'), im = cc.createImageData(c.width, c.height);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (owner[y * B + x] === k) { const s0 = (y * B + x) * 4, d0 = ((y - y0) * c.width + (x - x0)) * 4; for (let n = 0; n < 4; n++) im.data[d0 + n] = src[s0 + n]; }
+      cc.putImageData(im, 0, 0);
+      cc.globalCompositeOperation = 'source-atop'; cc.fillStyle = 'rgba(120,8,14,0.5)'; for (let n = 0; n < 4; n++) { cc.beginPath(); cc.ellipse(Math.random() * c.width, Math.random() * c.height, 1.5 + Math.random() * 3, 1.5 + Math.random() * 3, 0, 0, 7); cc.fill(); }
+      const wx = ((x0 + x1) / 2 - D / 2) * g, wy = ((y0 + y1) / 2 - D / 2) * g, l = Math.hypot(wx, wy) || 1, sp = 700 + Math.random() * 1100;
+      const around = Math.min(k, NS - k) / (NS / 2); // how far round from where it ripped
+      const q = Math.atan2(wy, wx) + (Math.random() - 0.5) * 0.6; // not quite straight out
+      chunks.push({ c, x: CX + wx, y: CY + wy, w: c.width * g, h: c.height * g, vx: Math.cos(q) * sp, vy: Math.sin(q) * sp - 200 * Math.random(),
+        delay: around * 0.05, life: 0, s: 1, sv: 0, rot: 0, vr: (Math.random() - 0.5) * 22,
+        drag: 1 + Math.random() * 1.5, grav: 900 + Math.random() * 300, shrink: 0.3 + Math.random() * 0.2,
+        th: 0, om: (Math.random() - 0.5) * 30, axis: Math.random() * Math.PI }); }); // th: how far it's tipped over in 3D, about `axis`
+    // blood: a spray flying out everywhere, and splatter on the wall behind
+    for (let n = 0; n < 160; n++) { const q = Math.random() * 7, sp = 200 + Math.random() * 900; spray.push({ x: CX + Math.cos(q) * Rc * g * 0.5, y: CY + Math.sin(q) * Rc * g * 0.5, vx: Math.cos(q) * sp, vy: Math.sin(q) * sp - 200, r: 1.2 + Math.random() * 2.6 }); }
+    for (let n = 0; n < 70; n++) { const q = Math.random() * 7, d = Math.pow(Math.random(), 0.8) * Rc * g * 2.6, r = Math.random() < 0.2 ? 3 + Math.random() * 3 : 1.2 + Math.random() * 2.2;
+      wctx.fillStyle = Math.random() < 0.4 ? '#6e0a0f' : '#930d15'; wctx.beginPath(); wctx.ellipse(CX + Math.cos(q) * d, CY + Math.sin(q) * d * 0.85, r, r * (0.75 + Math.random() * 0.3), q, 0, 7); wctx.fill(); }
+  }
+
+  render(0);
+  function step(now) {
+    let dt = Math.max(0, Math.min(0.04, (now - last) / 1000)); last = now; const rdt = dt;
+    if (hitstop > 0) { hitstop -= dt; dt = 0; }
+    t += dt;
+    // each pump: one stroke of the pump as it blows up to its next step, fast then easing off
+    if (pumped < PUMPS.length && t >= PUMPS[pumped].t) {
+      const P = PUMPS[pumped++]; playBuf('balloon-pump', { vol: 0.55, offset: P.at, dur: P.dur, fade: 0.05 });
+    }
+    let blown = 0;
+    PUMPS.forEach((P, k) => { const last = k === PUMPS.length - 1, len = last ? tPop - P.t : P.dur; // the last one never stops: slower and slower right up to the pop
+      const u = Math.max(0, Math.min(1, (t - P.t) / len)), from = k ? PUMPS[k - 1].to : 0; if (t >= P.t) blown = from + (P.to - from) * (1 - Math.pow(1 - u, last ? 2 : 3)); });
+    aTo = blown; gTo = 1 + (GMAX - 1) * blown; zoomTo = 1 + 0.12 * blown;
+    // the rubber squeaking and straining, for the last 1.5s before it goes
+    if (!rubbed && t >= tPop - 1.5) { rubbed = true; playBuf('balloon-rub', { vol: 0.25, dur: 1.5, fade: 0.2 }); }
+    if (!popped && t >= tPop) pop();
+    // springs, so each pump overshoots and wobbles
+    av += ((aTo - a) * 120 - av * 9) * dt; a += av * dt;
+    gv += ((gTo - g) * 140 - gv * 7) * dt; g += gv * dt;
+    const strain = !popped ? Math.max(0, Math.min(1, (t - T1) / (tPop - T1))) : 0;
+    if (!popped) render(Math.max(0, Math.min(1.05, a)));
+    // each strip: the rubber snaps back (shrinks fast with a bounce), flies out but is slowed hard by the air,
+    // flutters and crumples as it goes, then drifts down
+    chunks.forEach((c) => {
+      if ((c.delay -= dt) > 0) return;
+      c.life += dt;
+      c.sv += ((c.shrink - c.s) * 260 - c.sv * 16) * dt; c.s += c.sv * dt;
+      // a thin scrap in air: lying flat it catches the air (lots of drag), edge-on it slices through;
+      // tipped, the air pushes it sideways (it glides) and twists it back the other way, so it rocks
+      // side to side as it falls, like a leaf
+      const flat = Math.abs(Math.cos(c.th)), drag = c.drag * (0.25 + 2.5 * flat);
+      c.vx *= Math.exp(-drag * dt); c.vy = c.vy * Math.exp(-drag * dt) + c.grav * dt;
+      c.vx += Math.sin(2 * c.th) * Math.max(0, c.vy) * 1.6 * dt;
+      c.om += (-Math.sin(2 * c.th) * Math.max(0, c.vy) * 0.06 - c.om * 0.6) * dt;
+      c.th += c.om * dt;
+      c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt; c.vr *= Math.exp(-1.2 * dt);
+    });
+    spray.forEach((b) => { b.vy += 1000 * dt; b.x += b.vx * dt; b.y += b.vy * dt; });
+    // camera
+    recVY += (-recY * 160 - recVY * 13) * rdt; recY += recVY * rdt;
+    rollV += (-roll * 90 - rollV * 11) * rdt; roll += rollV * rdt;
+    zoomNow += ((popped ? 1 : zoomTo) - zoomNow) * Math.min(1, rdt * (popped ? 3 : 5));
+    flash = Math.max(0, flash - rdt * 3);
+    const tremble = strain * 1.5, jx = (Math.random() - 0.5) * tremble, jy = (Math.random() - 0.5) * tremble;
+
+    cx.fillStyle = '#0b0507'; cx.fillRect(0, 0, W, H);
+    cx.save(); cx.translate(W / 2, CY + recY); cx.scale(zoomNow, zoomNow); cx.rotate(roll); cx.translate(-W / 2, -CY);
+    drawRoom();
+    cx.drawImage(wall, 0, 0);
+    if (!popped) { // squash and stretch with the wobble, bulging and quivering before it goes
+      const wob = Math.max(-0.12, Math.min(0.12, gv * 0.03)), gg = g * (1 + Math.sin(t * 50) * strain * 0.004);
+      cx.save(); cx.translate(CX + jx, CY + jy); cx.scale(gg * (1 - wob), gg * (1 + wob)); cx.drawImage(buf, -D / 2, -D / 2); cx.restore(); }
+    chunks.forEach((c) => { cx.save(); cx.translate(c.x, c.y); cx.rotate(c.rot);
+      // tipped over in 3D: squashed along its tip axis, darker when its back is towards us
+      const ct = Math.cos(c.th);
+      cx.rotate(c.axis); cx.scale(1, Math.max(0.06, Math.abs(ct))); cx.rotate(-c.axis); cx.scale(c.s, c.s);
+      if (ct < 0) cx.filter = 'brightness(0.6)';
+      cx.drawImage(c.c, -c.w / 2, -c.h / 2, c.w, c.h); cx.restore(); });
+    spray.forEach((b) => { cx.fillStyle = '#a10f16'; cx.beginPath(); cx.ellipse(b.x, b.y, b.r * 0.75, b.r * 1.35, 0, 0, 7); cx.fill(); });
+    cx.restore();
+    if (flash > 0) { cx.fillStyle = `rgba(255,240,240,${flash * 0.7})`; cx.fillRect(0, 0, W, H); }
+    const gone = popped && chunks.every((c) => c.y - c.w > H / zoomNow + 200) && t > tPop + 1.5;
+    if (popped && t > tPop + 2.2) finished(); // the scraps are still drifting down as the ghost comes
+    if (!gone) run = requestAnimationFrame(step); else finished();
+  }
+  run = requestAnimationFrame(step);
+}
+document.getElementById('balloon').onclick = () => { if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } balloon(); };
+document.getElementById('chop').onclick = () => { if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } chop(); };
+document.getElementById('shock').onclick = () => { if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } shock(); };
+document.getElementById('burn').onclick = () => { if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } burn(); };
+letterSel.onchange = rip; colSel.onchange = rip;
+(async () => { col = COLOURS[colSel.value]; await new Promise((r) => { if (roomBg.complete) r(); else roomBg.onload = r; }); await loadLetter(letterSel.value); makeSeam(); makeStrands(); bonesList = []; eyes = eyeSprites.map(() => ({ out: false })); frame({ d: 0, shake: 0, rot: 0, up: 0, down: 0, bt: 0, bb: 0, bulge: 0 }, ...letterAt());
+  if (EMBED) { await Promise.all(BUF_LOADS); parent.postMessage({ gore: 'ready' }, '*'); } })();
+if (EMBED) window.addEventListener('message', (e) => { if (e.data && e.data.gore === 'go') ({ rip, chop, balloon })[EMBED](); });
+</script>
+</body>
+</html>
