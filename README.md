@@ -8,7 +8,7 @@ app/                  The host app (Electron): what runs on the TV
     main.js           Window + barcode:// file protocol
     preload.js        Gives games window.barcode (server URL, platform)
     shared/           Code every game uses (room-host.js = room server connection)
-    games/<id>/       One folder per game (dying-to-know/ = the trivia game)
+    games/<id>/       One folder per game (dying-to-know/ = the trivia game, articulate/ = the drawing game)
     electron-builder.base.yml   Build settings shared by all platforms
   linux/              Linux build config + build.sh  →  linux/dist/*.AppImage
   windows/            Windows build config + build.sh / build.bat  →  windows/dist/
@@ -32,6 +32,7 @@ tools/share.sh        Temporary public link to web/ for testing
 |---|---|
 | App, using the live server | `cd app/core && npm start` |
 | App, using a server on this PC | `cd app/core && npm run start:local` |
+| Articulate (live / local server) | `cd app/core && npm run articulate` / `npm run articulate:local` |
 | Join site locally | `cd web && python3 -m http.server 8080`, then open http://localhost:8080 |
 | Restart the live room server after editing it | `systemctl --user restart barcode-api` |
 | Build for Linux | `app/linux/build.sh` |

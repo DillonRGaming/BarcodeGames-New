@@ -7,4 +7,7 @@ window.BARCODE_GAMES = {
   'dying-to-know': {
     title: 'Dying to Know',
   },
+  articulate: {
+    title: 'Articulate',
+  },
 };

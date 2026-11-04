@@ -33,6 +33,15 @@
         "import http.server,functools,sys\nclass H(http.server.SimpleHTTPRequestHandler):\n    def end_headers(self):\n        self.send_header('Cache-Control','no-store'); super().end_headers()\nhttp.server.ThreadingHTTPServer(('',8779),functools.partial(H,directory='app/core')).serve_forever()"
       ],
       "port": 8779
+    },
+    {
+      "name": "articulate-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-c",
+        "import http.server,functools\nclass H(http.server.SimpleHTTPRequestHandler):\n    def end_headers(self):\n        self.send_header('Cache-Control','no-store'); super().end_headers()\nhttp.server.ThreadingHTTPServer(('',8791),functools.partial(H,directory='.')).serve_forever()"
+      ],
+      "port": 8791
     }
   ]
 }
