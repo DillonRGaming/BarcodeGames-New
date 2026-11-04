@@ -1,9 +1,8 @@
 /** View — everything the TV draws (DOM only; the game logic is in game.js). */
 
 const ICONS = {
-  crown: `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 27 L8 14 L15 19 L20 11 L25 19 L32 14 L30 27 Z" fill="#fff" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
-  pencil: `<svg viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(45 20 20)"><rect x="16" y="7" width="8" height="19" rx="1.5" fill="#fff"/><path d="M16 26 H24 L20 33 Z" fill="#fff"/></g></svg>`,
-  clock: `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="14" fill="none" stroke="#fff" stroke-width="4"/><path d="M20 14 V22 L25 26 M15 4 H25" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  crown: `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 27 L8 14 L15 19 L20 11 L25 19 L32 14 L30 27 Z" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
+  pencil: `<svg viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(45 20 20)"><rect x="16" y="7" width="8" height="19" rx="1.5" fill="currentColor"/><path d="M16 26 H24 L20 33 Z" fill="currentColor"/></g></svg>`,
   trophy: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path d="M22 18 H10 Q8 40 30 44 M78 18 H90 Q92 40 70 44" fill="none" stroke="#e6b23a" stroke-width="7" stroke-linecap="round"/>
     <path d="M22 10 H78 V36 Q78 62 50 64 Q22 62 22 36 Z" fill="#f3c443"/>
@@ -19,14 +18,17 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 /** The style that puts a player's colours on an element */
 const colours = (p) => `--main:${p.color.main};--light:${p.color.light}`;
 
-/** A player's character on their light tile, with an optional corner tag */
-function tileHTML(p, tag = '') {
-  return `<span class="tile" style="${colours(p)}">${Characters.svg(p.character)}${tag ? `<span class="tag">${ICONS[tag]}</span>` : ''}</span>`;
+/** A player's character on their light tile */
+function tileHTML(p) {
+  return `<span class="tile" style="${colours(p)}">${Characters.svg(p.character)}</span>`;
 }
 
 /** A player's bar: tile + name on their colour */
-function barHTML(p, { cls = '', tag = '' } = {}) {
-  return `<div class="pbar ${cls}" style="${colours(p)}">${tileHTML(p, tag)}<span class="name fit">${esc(p.name)}</span></div>`;
+/** badges: icons in their own tiles at the right end (crown for the VIP, pencil for the drawer); score: points before it */
+function barHTML(p, { cls = '', badges = [], score = false } = {}) {
+  const end = badges.filter(Boolean).map((b) => `<span class="tile badge">${ICONS[b]}</span>`).join('');
+  const pts = score ? `<span class="score">${p.score}</span>` : ''; // sits just left of the badge, if there is one
+  return `<div class="pbar ${cls}" style="${colours(p)}">${tileHTML(p)}<span class="name fit">${esc(p.name)}</span>${pts}${end}</div>`;
 }
 
 class View {
@@ -51,9 +53,8 @@ class View {
       podium: $('podium'),
     };
     this.screens = { lobby: $('lobby'), game: $('game'), win: $('win') };
-    this.slotIds = []; // which player sits in each lobby slot, to pop only new ones
     if (window.barcode && window.barcode.joinUrl) this.el.joinUrl.textContent = window.barcode.joinUrl;
-    this.el.timer.innerHTML = `${ICONS.clock}<span></span>`;
+    this.el.timer.innerHTML = '<span class="secs">0</span><span class="bar"><i></i></span>';
     this.el.trophy.innerHTML = ICONS.trophy;
     this.fit();
     window.addEventListener('resize', () => this.fit());
@@ -103,6 +104,31 @@ class View {
     this.el.roomCode.parentElement.classList.toggle('offline', !online);
   }
 
+  /** Dev (B): swap the background to the next texture and show its name for a moment */
+  nextTexture() {
+    this.tex = ((this.tex || 0) + 1) % TEXTURES.length;
+    const file = TEXTURES[this.tex];
+    const back = document.querySelector('.backdrop');
+    back.style.setProperty('--tex', `url("${new URL(file, location.href).href}")`);
+    this.devLabel(`${this.tex + 1}/${TEXTURES.length} · ${file.split('/').pop()}`);
+  }
+
+  /** Dev (N): swap the background to the next colour and show its name for a moment */
+  nextColor() {
+    this.bgColor = ((this.bgColor || 0) + 1) % BG_COLORS.length;
+    const [name, hex] = BG_COLORS[this.bgColor];
+    document.body.style.setProperty('--bg', hex);
+    this.devLabel(`${this.bgColor + 1}/${BG_COLORS.length} · ${name} ${hex}`);
+  }
+
+  devLabel(text) {
+    const label = document.getElementById('texName');
+    label.textContent = text;
+    label.classList.remove('hidden');
+    clearTimeout(this.texTimer);
+    this.texTimer = setTimeout(() => label.classList.add('hidden'), 2500);
+  }
+
   /* ---------- Lobby ---------- */
 
   renderLobby(players, maxPlayers, vipId) {
@@ -113,12 +139,18 @@ class View {
         rows.push('<div class="slot-empty"></div>');
         continue;
       }
-      const cls = [this.slotIds[i] !== p.id ? 'pop' : '', p.connected ? '' : 'away', p.id === vipId ? 'vip' : ''].join(' ');
-      rows.push(barHTML(p, { cls, tag: 'crown' }));
+      const cls = [p.connected ? '' : 'away', p.id === vipId ? 'vip' : ''].join(' ');
+      rows.push(barHTML(p, { cls, badges: [p.id === vipId && 'crown'] }));
     }
-    this.slotIds = players.map((p) => p.id);
     this.el.lobbyPlayers.innerHTML = rows.join('');
     this.fitText(this.el.lobbyPlayers);
+  }
+
+  /** Big 3, 2, 1 over the lobby; null hides it */
+  countdown(n) {
+    const el = document.getElementById('countdown');
+    el.classList.toggle('hidden', !n);
+    el.textContent = n || '';
   }
 
   /* ---------- Game ---------- */
@@ -132,26 +164,35 @@ class View {
     this.fitText(this.el.status.parentElement);
   }
 
+  /** Seconds on the left, a white bar that empties as time runs out; the box stays when there's no clock */
   setTimer(seconds) {
     const t = this.el.timer;
-    if (seconds == null) return t.classList.add('hidden');
-    t.classList.remove('hidden');
-    const num = t.querySelector('span');
-    if (num.textContent !== String(seconds)) {
-      num.textContent = seconds;
+    const num = t.querySelector('.secs');
+    const fill = t.querySelector('.bar i');
+    if (seconds == null) {
+      this.timerTotal = null;
+      num.textContent = '0';
+      fill.style.width = '0';
       t.classList.remove('low');
-      if (seconds <= 10) {
-        void t.offsetWidth; // restart the shake
-        t.classList.add('low');
-      }
+      return;
     }
+    if (this.timerTotal == null || seconds > this.timerTotal) this.timerTotal = seconds; // a new clock started
+    num.textContent = seconds;
+    fill.style.width = `${(seconds / this.timerTotal) * 100}%`;
+    t.classList.toggle('low', seconds <= 10);
   }
 
-  renderPlayers(players, drawerId) {
-    this.el.players.innerHTML = players.map((p) => barHTML(p, {
-      cls: [p.id === drawerId ? 'drawing' : '', p.connected ? '' : 'away'].join(' '),
-      tag: 'pencil',
-    })).join('');
+  /** In-game list: the drawer on top, then everyone else, then the empty spots */
+  renderPlayers(players, drawerId, maxPlayers = 8) {
+    const drawer = players.find((p) => p.id === drawerId);
+    const ordered = drawer ? [drawer, ...players.filter((p) => p !== drawer)] : players;
+    const rows = ordered.map((p) => barHTML(p, {
+      cls: p.connected ? '' : 'away',
+      badges: [p === drawer && 'pencil', p.id === this.vipId && 'crown'],
+      score: true,
+    }));
+    for (let i = ordered.length; i < maxPlayers; i++) rows.push('<div class="slot-empty"></div>');
+    this.el.players.innerHTML = rows.join('');
     this.fitText(this.el.players);
   }
 
@@ -170,13 +211,11 @@ class View {
       h.innerHTML = '';
       return;
     }
-    const before = new Set([...h.querySelectorAll('.letter.shown')].map((el) => el.dataset.i));
     const parts = [...word].map((ch, i) => {
       if (ch === ' ') return '<span class="gap"></span>';
       if (!/[a-z]/i.test(ch)) return `<span class="letter mark">${esc(ch)}</span>`;
       const shown = full || revealed.has(i);
-      const isNew = shown && !before.has(String(i));
-      return `<span class="letter${shown ? ' shown' : ''}${isNew ? ' new' : ''}" data-i="${i}">${shown ? esc(ch) : ''}</span>`;
+      return `<span class="letter">${shown ? esc(ch) : ''}</span>`;
     });
     const lens = word.split(' ').map((w) => `<span>${w.length}</span>`).join('');
     // long words get narrower slots so they always fit the bar
@@ -197,9 +236,6 @@ class View {
     o.innerHTML = html;
     o.classList.remove('hidden');
     this.fitText(o);
-    o.style.animation = 'none';
-    void o.offsetWidth;
-    o.style.animation = '';
   }
 
   showPicking(player) {

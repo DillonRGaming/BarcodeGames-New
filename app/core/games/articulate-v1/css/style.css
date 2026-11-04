@@ -1,0 +1,564 @@
+/* Articulate — TV screen. A fixed 1920×1080 stage scaled to the window.
+   Soft and chunky: rounded bars in each player's colour, cute characters, an almost-black icon-pattern backdrop. */
+
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #0b0a0e; }
+
+:root {
+  --ink: #232733;
+  --paper: #fbfaf6;
+  --panel: rgba(255, 255, 255, 0.12);
+  --line: rgba(255, 255, 255, 0.8);
+  --row: 84px; /* every one-line bar: player rows, round, timer, hint */
+  --r: 12px;
+  --font: 'Fredoka', 'Nunito', sans-serif;
+}
+
+/* Almost black behind every screen */
+body { --bg: #0b0a0e; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font);
+  font-weight: 600;
+  color: #fff;
+  background: var(--bg);
+  user-select: none;
+  cursor: default;
+}
+
+b { font-weight: inherit; }
+
+.hidden { display: none !important; }
+
+/* ---------- Backdrop: almost black with faint diagonal lines ---------- */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.backdrop::before {
+  content: '';
+  position: absolute;
+  inset: -600px;
+  background: var(--tex, url('../assets/diagonal/diagonal_01.png')) 0 0 / 512px 512px;
+  opacity: 0.05;
+  animation: drift 120s linear infinite; /* slow, endless drift */
+}
+
+@keyframes drift {
+  to { transform: translate(512px, 512px); }
+}
+
+
+.stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--scale, 1));
+}
+
+/* name of the background texture, shown briefly while cycling with B */
+.tex-name {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  font: 600 18px var(--font);
+}
+
+/* ---------- Building blocks ---------- */
+
+/* neutral bar: dark glass, white text */
+.panel {
+  background: var(--panel);
+  border-radius: var(--r);
+}
+
+/* a player's bar: their colour, their character on a lighter tile, name in white */
+.pbar {
+  --h: var(--row);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--h) * 0.16);
+  height: var(--h);
+  padding: calc(var(--h) * 0.08);
+  background: var(--main);
+  border-radius: calc(var(--h) * 0.14);
+  font-size: calc(var(--h) * 0.46);
+}
+
+/* sized by the --h of whatever it sits in (a bar's height, or set directly) */
+.tile {
+  position: relative;
+  flex: none;
+  width: calc(var(--h) * 0.84);
+  height: calc(var(--h) * 0.84);
+  background: var(--light);
+  border-radius: calc(var(--h) * 0.1);
+}
+
+.tile .character {
+  position: absolute;
+  inset: 6%;
+  width: 88%;
+  height: 88%;
+}
+
+/* points at the right end of a bar (left of the badge when there is one) */
+.pbar .score {
+  flex: none;
+  padding-right: calc(var(--h) * 0.1);
+}
+
+/* the VIP's crown / drawer's pencil: an icon in a tile like the character's, at the bar's right end */
+.tile.badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2a2730;
+}
+
+.tile.badge svg { width: 62%; height: 62%; }
+
+.name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the two short lines either side of a heading */
+.rule {
+  flex: 1;
+  max-width: 150px;
+  min-width: 40px;
+  height: 9px;
+  border-radius: 5px;
+  background: var(--line);
+}
+
+/* ---------- Screens ---------- */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.screen.active {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+/* ---------- Lobby: players centred on the left, join info centred on the right ---------- */
+
+.lobby-players {
+  position: absolute;
+  left: 80px;
+  top: 84px; /* 8 bars of 100 + 7 gaps of 16 = 912, centred in 1080 */
+  width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lobby-players .pbar { --h: 100px; }
+
+.slot-empty {
+  height: 100px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pbar.away { opacity: 0.45; }
+
+.players .slot-empty {
+  height: var(--row);
+  border-radius: calc(var(--row) * 0.14);
+}
+
+.lobby-side {
+  position: absolute;
+  left: 800px;
+  right: 80px;
+  top: 84px;
+  bottom: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+}
+
+.join-at {
+  font-size: 64px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.join-at b { color: #fff; font-weight: 700; }
+
+.logo {
+  font-family: 'Luckiest Guy', var(--font);
+  font-size: 170px;
+  font-weight: 400;
+  letter-spacing: 4px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.room-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 44px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.room-code b {
+  font-size: 110px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 10px;
+  text-indent: 10px;
+  min-height: 116px;
+  color: #fff;
+}
+
+.room-code.offline b { opacity: 0.4; }
+
+/* ---------- 3, 2, 1: takes the place of the join info and logo ---------- */
+
+.countdown {
+  position: absolute;
+  left: 800px;
+  right: 80px;
+  top: 84px;
+  bottom: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Luckiest Guy', var(--font);
+  font-size: 420px;
+  line-height: 1;
+}
+
+.lobby:has(~ .countdown:not(.hidden)) .lobby-side { visibility: hidden; }
+
+/* ---------- Game: board centred, equal columns either side ----------
+   columns: 60–530 · 570–1350 (board) · 1390–1860; rows: 98–182 (round · word · timer) · 202–982 */
+
+.round,
+.timer {
+  position: absolute;
+  top: 98px;
+  width: 470px;
+  height: var(--row);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 44px;
+}
+
+.round { left: 60px; }
+.timer { right: 60px; }
+
+.timer {
+  justify-content: flex-start;
+  gap: 22px;
+  padding: 0 28px;
+}
+
+.timer .secs {
+  flex: none;
+  min-width: 56px;
+}
+
+.timer .bar {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.timer .bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.timer.low {
+  background: #c0594f;
+}
+
+.status {
+  position: absolute;
+  left: 570px;
+  top: 98px;
+  width: 780px;
+  height: var(--row);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.status:has(.status-text:empty) { visibility: hidden; }
+
+.status-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 54px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.players {
+  position: absolute;
+  left: 60px;
+  top: 202px;
+  width: 470px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* 8 bars of 84 + 7 gaps = 777, level with the board */
+}
+
+.board {
+  position: absolute;
+  left: 570px;
+  top: 202px;
+  width: 780px;
+  height: 780px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.board canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 50px;
+  text-align: center;
+  color: var(--ink);
+  background: rgba(251, 250, 246, 0.94);
+}
+
+.overlay.solid { background: var(--paper); }
+
+.overlay .tile {
+  --h: 240px;
+  margin-bottom: 30px;
+}
+
+.overlay .big,
+.overlay .word {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.overlay .big { font-size: 110px; }
+.overlay .small { font-size: 54px; font-weight: 500; opacity: 0.65; }
+.overlay .word { font-size: 130px; text-transform: uppercase; }
+
+.hint {
+  position: absolute;
+  left: 570px;
+  top: 98px;
+  width: 780px;
+  height: var(--row);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap, 12px);
+}
+
+
+.hint .letter {
+  position: relative;
+  width: var(--lw, 38px);
+  height: 58px;
+  font-size: min(44px, calc(var(--lw, 38px) * 1.3)); /* same size as Round and the timer */
+  font-weight: 700;
+  line-height: 50px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.hint .letter::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.hint .letter.mark::after { display: none; }
+.hint .gap { width: calc(var(--lw, 38px) * 0.6); }
+
+.hint .lens {
+  display: flex;
+  gap: 10px;
+  align-self: flex-end;
+  margin: 0 0 12px 18px; /* sits on the same line as the blanks */
+  line-height: 1;
+  font-size: 44px;
+  opacity: 0.6;
+}
+
+/* ---------- Guess feed: a player bar, then their message ---------- */
+
+.feed {
+  position: absolute;
+  left: 1390px;
+  top: 202px;
+  width: 470px;
+  height: 780px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 18px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 110px);
+  mask-image: linear-gradient(to bottom, transparent, #000 110px);
+}
+
+.entry {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+
+.entry .pbar {
+  --h: 56px;
+  align-self: stretch; /* the full width of the chat, like the message under it */
+}
+
+.entry .msg {
+  align-self: stretch;
+  padding: 10px 20px;
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Win ---------- */
+
+.win-head {
+  position: absolute;
+  top: 95px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+}
+
+.trophy svg {
+  display: block;
+  width: 180px;
+  height: 180px;
+}
+
+.win-title {
+  position: absolute;
+  top: 290px;
+  left: 80px;
+  right: 80px;
+  text-align: center;
+  font-size: 100px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.podium {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 465px;
+  height: 520px; /* trophy to podium bottom: 95–985, centred */
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 90px;
+}
+
+.place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.place .num {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46px;
+  font-weight: 700;
+}
+
+.place .tile { --h: 260px; }
+.place.p1 .tile { --h: 330px; }
+
+.place .pname {
+  width: 400px;
+  height: var(--row);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+  background: var(--main);
+  font-size: 46px;
+}
+
+.place .pname .name { text-align: center; }

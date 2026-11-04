@@ -1,12 +1,12 @@
 /* Articulate — TV screen. A fixed 1920×1080 stage scaled to the window.
    Soft and chunky: rounded bars in each player's colour, cute characters, an almost-black icon-pattern backdrop. */
 
-@property --bg { syntax: '<color>'; inherits: true; initial-value: #131217; }
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #0b0a0e; }
 
 :root {
   --ink: #232733;
   --paper: #fbfaf6;
-  --panel: rgba(255, 255, 255, 0.09);
+  --panel: rgba(255, 255, 255, 0.12);
   --line: rgba(255, 255, 255, 0.8);
   --row: 84px; /* every one-line bar: player rows, round, timer, hint */
   --r: 12px;
@@ -14,7 +14,7 @@
 }
 
 /* Almost black behind every screen */
-body { --bg: #131217; }
+body { --bg: #0b0a0e; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,7 +29,6 @@ body {
   font-weight: 600;
   color: #fff;
   background: var(--bg);
-  transition: --bg 0.8s;
   user-select: none;
   cursor: default;
 }
@@ -38,7 +37,7 @@ b { font-weight: inherit; }
 
 .hidden { display: none !important; }
 
-/* ---------- Backdrop: almost black with a pattern of white outline icons ---------- */
+/* ---------- Backdrop: almost black with faint diagonal lines ---------- */
 
 .backdrop {
   position: fixed;
@@ -51,14 +50,15 @@ b { font-weight: inherit; }
   content: '';
   position: absolute;
   inset: -600px;
-  background: url('../doodles.svg') 0 0 / 600px 600px;
-  opacity: 0.11;
-  animation: doodles 90s linear infinite;
+  background: var(--tex, url('../assets/diagonal/diagonal_01.png')) 0 0 / 512px 512px;
+  opacity: 0.05;
+  animation: drift 120s linear infinite; /* slow, endless drift */
 }
 
-@keyframes doodles {
-  to { transform: translate(600px, 600px); }
+@keyframes drift {
+  to { transform: translate(512px, 512px); }
 }
+
 
 .stage {
   position: absolute;
@@ -67,6 +67,18 @@ b { font-weight: inherit; }
   width: 1920px;
   height: 1080px;
   transform: translate(-50%, -50%) scale(var(--scale, 1));
+}
+
+/* name of the background texture, shown briefly while cycling with B */
+.tex-name {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  font: 600 18px var(--font);
 }
 
 /* ---------- Building blocks ---------- */
@@ -85,7 +97,6 @@ b { font-weight: inherit; }
   gap: calc(var(--h) * 0.16);
   height: var(--h);
   padding: calc(var(--h) * 0.08);
-  padding-right: calc(var(--h) * 0.24);
   background: var(--main);
   border-radius: calc(var(--h) * 0.14);
   font-size: calc(var(--h) * 0.46);
@@ -108,22 +119,21 @@ b { font-weight: inherit; }
   height: 88%;
 }
 
-/* little round tag on a tile's corner (VIP crown, drawer's pencil) */
-.tag {
-  position: absolute;
-  right: -14%;
-  top: -14%;
-  width: 42%;
-  height: 42%;
-  border-radius: 50%;
-  background: #f3c443;
-  display: none;
+/* points at the right end of a bar (left of the badge when there is one) */
+.pbar .score {
+  flex: none;
+  padding-right: calc(var(--h) * 0.1);
 }
 
-.tag svg { display: block; width: 100%; height: 100%; }
+/* the VIP's crown / drawer's pencil: an icon in a tile like the character's, at the bar's right end */
+.tile.badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2a2730;
+}
 
-.pbar.vip .tag,
-.pbar.drawing .tag { display: block; }
+.tile.badge svg { width: 62%; height: 62%; }
 
 .name {
   flex: 1;
@@ -150,26 +160,13 @@ b { font-weight: inherit; }
   inset: 0;
   visibility: hidden;
   opacity: 0;
-  transform: translateY(30px);
-  transition: opacity 0.35s, transform 0.35s, visibility 0s 0.35s;
 }
 
 .screen.active {
   visibility: visible;
   opacity: 1;
-  transform: none;
-  transition: opacity 0.35s, transform 0.35s;
 }
 
-@keyframes pop {
-  0% { transform: scale(0.4); }
-  100% { transform: scale(1); }
-}
-
-@keyframes appear {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
 /* ---------- Lobby: players centred on the left, join info centred on the right ---------- */
 
@@ -188,11 +185,15 @@ b { font-weight: inherit; }
 .slot-empty {
   height: 100px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.pbar.pop { animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
 .pbar.away { opacity: 0.45; }
+
+.players .slot-empty {
+  height: var(--row);
+  border-radius: calc(var(--row) * 0.14);
+}
 
 .lobby-side {
   position: absolute;
@@ -216,8 +217,10 @@ b { font-weight: inherit; }
 .join-at b { color: #fff; font-weight: 700; }
 
 .logo {
-  font-size: 190px;
-  font-weight: 700;
+  font-family: 'Luckiest Guy', var(--font);
+  font-size: 170px;
+  font-weight: 400;
+  letter-spacing: 4px;
   line-height: 1.1;
   white-space: nowrap;
 }
@@ -226,30 +229,48 @@ b { font-weight: inherit; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 52px;
+  font-size: 44px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
 }
 
 .room-code b {
-  font-size: 170px;
+  font-size: 110px;
   font-weight: 700;
   line-height: 1.05;
-  letter-spacing: 12px;
-  text-indent: 12px;
-  min-height: 178px;
+  letter-spacing: 10px;
+  text-indent: 10px;
+  min-height: 116px;
   color: #fff;
 }
 
 .room-code.offline b { opacity: 0.4; }
 
+/* ---------- 3, 2, 1: takes the place of the join info and logo ---------- */
+
+.countdown {
+  position: absolute;
+  left: 800px;
+  right: 80px;
+  top: 84px;
+  bottom: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Luckiest Guy', var(--font);
+  font-size: 420px;
+  line-height: 1;
+}
+
+.lobby:has(~ .countdown:not(.hidden)) .lobby-side { visibility: hidden; }
+
 /* ---------- Game: board centred, equal columns either side ----------
-   columns: 60–530 · 570–1350 (board) · 1390–1860; rows: 46–130 · 150–930 · 950–1034 */
+   columns: 60–530 · 570–1350 (board) · 1390–1860; rows: 98–182 (round · word · timer) · 202–982 */
 
 .round,
 .timer {
   position: absolute;
-  top: 46px;
+  top: 98px;
   width: 470px;
   height: var(--row);
   display: flex;
@@ -262,22 +283,41 @@ b { font-weight: inherit; }
 .round { left: 60px; }
 .timer { right: 60px; }
 
-.timer svg { width: 50px; height: 50px; }
+.timer {
+  justify-content: flex-start;
+  gap: 22px;
+  padding: 0 28px;
+}
+
+.timer .secs {
+  flex: none;
+  min-width: 56px;
+}
+
+.timer .bar {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.timer .bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 8px;
+  background: #fff;
+}
 
 .timer.low {
   background: #c0594f;
-  animation: shake 0.5s;
-}
-
-@keyframes shake {
-  25% { transform: rotate(-1.5deg); }
-  75% { transform: rotate(1.5deg); }
 }
 
 .status {
   position: absolute;
   left: 570px;
-  top: 46px;
+  top: 98px;
   width: 780px;
   height: var(--row);
   display: flex;
@@ -299,7 +339,7 @@ b { font-weight: inherit; }
 .players {
   position: absolute;
   left: 60px;
-  top: 150px;
+  top: 202px;
   width: 470px;
   display: flex;
   flex-direction: column;
@@ -309,7 +349,7 @@ b { font-weight: inherit; }
 .board {
   position: absolute;
   left: 570px;
-  top: 150px;
+  top: 202px;
   width: 780px;
   height: 780px;
   border-radius: 20px;
@@ -334,7 +374,6 @@ b { font-weight: inherit; }
   text-align: center;
   color: var(--ink);
   background: rgba(251, 250, 246, 0.94);
-  animation: appear 0.3s;
 }
 
 .overlay.solid { background: var(--paper); }
@@ -342,7 +381,6 @@ b { font-weight: inherit; }
 .overlay .tile {
   --h: 240px;
   margin-bottom: 30px;
-  animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 .overlay .big,
@@ -352,7 +390,6 @@ b { font-weight: inherit; }
   overflow: hidden;
   font-weight: 700;
   line-height: 1.3;
-  animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 .overlay .big { font-size: 110px; }
@@ -362,7 +399,7 @@ b { font-weight: inherit; }
 .hint {
   position: absolute;
   left: 570px;
-  top: 950px;
+  top: 98px;
   width: 780px;
   height: var(--row);
   display: flex;
@@ -371,13 +408,12 @@ b { font-weight: inherit; }
   gap: var(--gap, 12px);
 }
 
-.hint:empty { visibility: hidden; }
 
 .hint .letter {
   position: relative;
   width: var(--lw, 38px);
   height: 58px;
-  font-size: calc(var(--lw, 38px) * 1.3);
+  font-size: min(44px, calc(var(--lw, 38px) * 1.3)); /* same size as Round and the timer */
   font-weight: 700;
   line-height: 50px;
   text-align: center;
@@ -396,7 +432,6 @@ b { font-weight: inherit; }
 }
 
 .hint .letter.mark::after { display: none; }
-.hint .letter.new { animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
 .hint .gap { width: calc(var(--lw, 38px) * 0.6); }
 
 .hint .lens {
@@ -405,7 +440,7 @@ b { font-weight: inherit; }
   align-self: flex-end;
   margin: 0 0 12px 18px; /* sits on the same line as the blanks */
   line-height: 1;
-  font-size: 30px;
+  font-size: 44px;
   opacity: 0.6;
 }
 
@@ -414,9 +449,9 @@ b { font-weight: inherit; }
 .feed {
   position: absolute;
   left: 1390px;
-  top: 150px;
+  top: 202px;
   width: 470px;
-  height: 884px;
+  height: 780px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -432,16 +467,12 @@ b { font-weight: inherit; }
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  animation: slidein 0.25s ease-out;
 }
 
-@keyframes slidein {
-  from { opacity: 0; transform: translateX(40px); }
-}
 
 .entry .pbar {
   --h: 56px;
-  max-width: 100%;
+  align-self: stretch; /* the full width of the chat, like the message under it */
 }
 
 .entry .msg {
@@ -502,17 +533,6 @@ b { font-weight: inherit; }
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  opacity: 0;
-  animation: rise 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) forwards;
-}
-
-.place.p1 { animation-delay: 1.4s; }
-.place.p2 { animation-delay: 0.8s; }
-.place.p3 { animation-delay: 0.2s; }
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(80px) scale(0.6); }
-  to { opacity: 1; transform: none; }
 }
 
 .place .num {

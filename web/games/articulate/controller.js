@@ -26,22 +26,23 @@ BarcodeJoin.registerController('articulate', ({ root, player, send, onMessage })
     undo: '<svg viewBox="0 0 32 32"><path d="M12 7 L5 13 L12 19" fill="none" stroke="#fff" stroke-width="3.6" stroke-linejoin="round" stroke-linecap="round"/><path d="M6 13 H19 C24 13 27 16 27 20 C27 24 24 27 19 27 H13" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/></svg>',
     send: '<svg viewBox="0 0 32 32"><path d="M6 16 H25 M17 8 L25 16 L17 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     clear: '<svg viewBox="0 0 32 32"><path d="M8 11 H24 L22.5 27 Q22.3 28.5 21 28.5 H11 Q9.7 28.5 9.5 27 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M5 10 H27 M13 10 V6 H19 V10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    crown: '<svg viewBox="0 0 40 40"><path d="M10 27 L8 14 L15 19 L20 11 L25 19 L32 14 L30 27 Z" fill="#fff" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    crown: '<svg viewBox="0 0 40 40"><path d="M10 27 L8 14 L15 19 L20 11 L25 19 L32 14 L30 27 Z" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
   };
 
   root.innerHTML = `
     <div class="ar" data-bg="lobby">
       <div class="ar-backdrop"></div>
       <header class="ar-head">
-        <span class="ar-tile"><span class="ar-tag hidden">${ICONS.crown}</span></span>
+        <span class="ar-tile"></span>
         <span class="ar-name"></span>
+        <span class="ar-tile ar-badge hidden">${ICONS.crown}</span>
       </header>
       <section class="ar-body"></section>
     </div>`;
   const app = root.querySelector('.ar');
   const head = root.querySelector('.ar-head');
   const tile = root.querySelector('.ar-tile');
-  const vipTag = root.querySelector('.ar-tag');
+  const vipTag = root.querySelector('.ar-badge');
   const body = root.querySelector('.ar-body');
   root.querySelector('.ar-name').textContent = player.name;
 
@@ -351,7 +352,7 @@ BarcodeJoin.registerController('articulate', ({ root, player, send, onMessage })
       if (tile.dataset.character !== String(data.character)) {
         tile.dataset.character = data.character;
         tile.insertAdjacentHTML('afterbegin', Characters.svg(data.character));
-        if (tile.children.length > 2) tile.children[1].remove(); // the previous character
+        if (tile.children.length > 1) tile.children[1].remove(); // the previous character
       }
       const wasVip = isVip;
       isVip = !!data.vip;

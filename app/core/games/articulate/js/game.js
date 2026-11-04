@@ -7,7 +7,7 @@
  * Fake players: up to AUTO_BOTS bots wander into the lobby by themselves (0 turns this off); a real player
  * arriving at a full lobby takes a bot's place.
  *
- * Dev keys: B add a bot · S start · N skip ahead (pick / end the turn) · W win screen · L back to the lobby
+ * Dev keys: Space start / stop (adds bots if needed) · A add a bot · B next background texture · N next background colour · S start · K skip ahead (pick / end the turn) · W win screen · L back to the lobby
  */
 
 const TITLE = 'Articulate';
@@ -59,7 +59,6 @@ class Game {
     this.revealed = new Set();
     this.hintTimes = [];
     this.deadline = 0;
-    this.lastSecond = null;
     this.vipId = null;
     this.code = null;
     this.botCount = 0;
@@ -67,7 +66,6 @@ class Game {
     this.connect();
     setInterval(() => this.tick(), 200);
     document.addEventListener('keydown', (e) => this.devKey(e));
-    window.addEventListener('pointerdown', () => Sound.unlock(), { once: true });
     this.toLobby();
   }
 
@@ -156,7 +154,6 @@ class Game {
       guesses: [],
       lastGuessAt: 0,
     });
-    Sound.play('join');
     this.lobbyChanged();
   }
 
@@ -177,7 +174,6 @@ class Game {
       // Leaving in the lobby frees the spot; once the game is on, players can reconnect
       this.players = this.players.filter((x) => x !== p);
       this.net.kick(id);
-      Sound.play('leave');
       this.lobbyChanged();
       return;
     }
@@ -205,6 +201,8 @@ class Game {
     if (id === this.vipId) return;
     const old = this.byId(this.vipId);
     this.vipId = id;
+    this.view.vipId = id;
+    if (this.phase !== 'lobby') this.view.renderPlayers(this.players, this.drawer && this.drawer.id);
     if (this.phase === 'lobby') this.view.renderLobby(this.players, MAX_PLAYERS, this.vipId);
     if (old) this.sync(old);
     if (vip) this.sync(vip);
@@ -219,6 +217,8 @@ class Game {
     switch (this.phase) {
       case 'lobby':
         return { ...base, screen: 'lobby', bg: 'lobby', canStart: this.players.length >= MIN_PLAYERS };
+      case 'countdown':
+        return { ...base, screen: 'wait', bg: 'lobby' };
       case 'round':
         return { ...base, screen: 'wait', bg: 'pick' };
       case 'pick':
@@ -278,7 +278,6 @@ class Game {
     this.phase = phase;
     this.step++;
     this.deadline = 0;
-    this.lastSecond = null;
     this.view.setTimer(null);
   }
 
@@ -301,6 +300,7 @@ class Game {
     this.drawer = null;
     this.round = 0;
     this.net.lock(false);
+    this.view.countdown(null);
     this.view.show('lobby', 'lobby');
     this.lobbyChanged();
   }
@@ -315,14 +315,29 @@ class Game {
     }, 1500 + Math.random() * 2500);
   }
 
+  /** 3, 2, 1 on the TV, then the game starts */
   startGame() {
     if (this.phase !== 'lobby' || this.players.length < MIN_PLAYERS) return;
+    clearTimeout(this.botTimer);
     this.net.lock(true);
+    this.setPhase('countdown');
+    this.syncAll();
+    const count = (n) => {
+      if (!n) {
+        this.view.countdown(null);
+        return this.beginGame();
+      }
+      this.view.countdown(n);
+      this.after(1, () => count(n - 1));
+    };
+    count(3);
+  }
+
+  beginGame() {
     this.round = 0;
     this.used.clear();
     this.players.forEach((p) => { p.score = 0; });
     this.view.feedClear();
-    Sound.play('start');
     this.nextRound();
   }
 
@@ -402,10 +417,9 @@ class Game {
     this.board.clear();
     this.view.overlay(null);
     this.view.show('game', 'draw');
-    this.view.setStatus(this.drawer.name, 'is drawing');
+    this.view.setStatus('');
     this.view.setHint(word, this.revealed);
     this.view.renderPlayers(this.players, this.drawer.id);
-    Sound.play('pick');
     this.syncAll();
     if (this.drawer.bot) this.botPen = null;
   }
@@ -425,7 +439,6 @@ class Game {
     if (hidden.length <= 1) return;
     this.revealed.add(pickRandom(hidden));
     this.view.setHint(this.word, this.revealed);
-    Sound.play('hint');
   }
 
   guess(p, raw) {
@@ -443,13 +456,11 @@ class Game {
       p.guessed = true;
       this.view.feedAdd(p, 'guessed the word');
       this.view.renderPlayers(this.players, this.drawer.id);
-      Sound.play('correct');
       this.sync(p);
       this.checkAllGuessed();
     } else {
       p.guesses.push({ text, close: result === 'close' });
       this.view.feedAdd(p, text);
-      Sound.play('guess');
       this.sync(p);
     }
   }
@@ -457,7 +468,6 @@ class Game {
   checkAllGuessed() {
     const guessers = this.players.filter((p) => p !== this.drawer && p.connected);
     if (guessers.length && guessers.every((p) => p.guessed)) {
-      Sound.play('allGuessed');
       this.endTurn();
     }
   }
@@ -493,13 +503,11 @@ class Game {
     this.drawer.turnPoints = guessers.length ? round5(total / guessers.length) : 0;
     this.players.forEach((p) => { p.score += p.turnPoints; });
 
-    const allGuessed = guessers.length && guessers.every((p) => p.guessed);
     this.setPhase('result');
     this.view.setStatus('');
     this.view.setHint(this.word, this.revealed, true);
     this.view.showTurnResult(this.word);
     this.view.renderPlayers(this.players, null);
-    if (!allGuessed) Sound.play('end');
     this.syncAll();
     this.after(RESULT_TIME, () => this.nextTurn());
   }
@@ -509,7 +517,6 @@ class Game {
     this.drawer = null;
     this.view.renderWin(this.players);
     this.view.show('win', 'win');
-    Sound.play('win');
     this.syncAll();
   }
 
@@ -520,8 +527,6 @@ class Game {
     if (this.deadline) {
       const left = Math.max(0, Math.ceil((this.deadline - now) / 1000));
       this.view.setTimer(left);
-      if (this.phase === 'draw' && left <= 10 && left > 0 && left !== this.lastSecond) Sound.play('tick');
-      this.lastSecond = left;
     }
     if (this.phase === 'draw') {
       while (this.hintTimes.length && now - this.drawStart >= this.hintTimes[0]) {
@@ -540,10 +545,20 @@ class Game {
 
   devKey(e) {
     if (e.target.closest('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (this.phase === 'lobby') {
+        while (this.players.length < MIN_PLAYERS) this.addBot();
+        this.startGame();
+      } else this.toLobby();
+      return;
+    }
     switch (e.key.toLowerCase()) {
-      case 'b': this.addBot(); break;
+      case 'a': this.addBot(); break;
+      case 'b': this.view.nextTexture(); break;
       case 's': this.startGame(); break;
-      case 'n':
+      case 'n': this.view.nextColor(); break;
+      case 'k':
         if (this.phase === 'pick') this.pickWord(-1);
         else if (this.phase === 'draw') this.endTurn();
         else if (this.phase === 'round' || this.phase === 'result') this.nextTurn();

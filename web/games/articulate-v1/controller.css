@@ -1,0 +1,438 @@
+/* Articulate — phone controller. Same look as the TV: almost-black backdrop with faint diagonal lines, rounded bars in the player's colour. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=block');
+
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #0b0a0e; }
+
+:root {
+  --ar-lobby: #0b0a0e;
+  --ar-pick: #0b0a0e;
+  --ar-draw: #0b0a0e;
+  --ar-win: #0b0a0e;
+}
+
+body[data-game='articulate'] {
+  background: var(--ar-lobby);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.ar {
+  --main: #4f86b9;
+  --light: #a9d4f5;
+  --ink: #232733;
+  --paper: #fbfaf6;
+  --panel: rgba(255, 255, 255, 0.12);
+  --r: 14px;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-weight: 600;
+  color: #fff;
+  background: var(--bg);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ar { --bg: #0b0a0e; }
+
+.ar .hidden { display: none !important; }
+
+/* ---------- Backdrop: almost black with faint diagonal lines ---------- */
+
+.ar-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ar-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: -390px;
+  background: url('assets/diagonal_01.png') 0 0 / 384px 384px;
+  opacity: 0.05;
+  animation: ar-drift 100s linear infinite; /* slow, endless drift */
+}
+
+@keyframes ar-drift {
+  to { transform: translate(384px, 384px); }
+}
+
+
+/* ---------- Name bar: the player's colour, their character, their name ---------- */
+
+.ar-head {
+  flex: none;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: calc(10px + env(safe-area-inset-top)) 12px 0;
+  padding: 7px;
+  height: 74px;
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.ar-head.has-color { background: var(--main); }
+
+.ar-tile {
+  position: relative;
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  background: var(--light);
+}
+
+.ar-tile .character {
+  position: absolute;
+  inset: 6%;
+  width: 88%;
+  height: 88%;
+}
+
+.ar-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2a2730;
+}
+
+.ar-badge svg { width: 62%; height: 62%; }
+
+.ar-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 34px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Body ---------- */
+
+.ar-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px calc(14px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.ar-btn {
+  width: 100%;
+  min-height: 72px;
+  padding: 6px 18px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--main);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 34px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+
+.ar-btn:not(:disabled):active { transform: scale(0.97); }
+.ar-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* light buttons (word choices): paper with dark text, the picked one in your colour */
+.ar-btn.ar-light {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.ar-btn.ar-light.picked {
+  opacity: 1;
+  background: var(--main);
+  color: #fff;
+}
+
+.ar-bottom { margin-top: auto; }
+
+.ar-timer {
+  min-width: 60px;
+  height: 46px;
+  padding: 0 12px;
+  border-radius: 11px;
+  background: var(--panel);
+  font-size: 28px;
+  line-height: 46px;
+  text-align: center;
+}
+
+.ar-timer:empty { display: none; }
+.ar-timer.low { background: #c0594f; }
+
+/* ---------- Choose a word ---------- */
+
+.ar-choose {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+}
+
+.ar-timer-float {
+  position: absolute;
+  top: 16px;
+  right: 12px;
+}
+
+.ar-word {
+  min-height: 86px;
+  font-size: 40px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---------- Draw ---------- */
+
+.ar-draw {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ar-wordbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 6px 0 16px;
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.ar-theword {
+  flex: 1;
+  min-width: 0;
+  font-size: 32px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ar-wordbar .ar-timer { background: rgba(255, 255, 255, 0.14); }
+.ar-wordbar .ar-timer.low { background: #c0594f; }
+
+.ar-canvas-wrap {
+  flex: none;
+  align-self: center;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.ar-canvas {
+  display: block;
+  touch-action: none;
+}
+
+.ar-palette {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.ar-swatch {
+  aspect-ratio: 1;
+  max-height: 46px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+
+/* picked colour: turns into a circle */
+.ar-swatch.on { border-radius: 50%; }
+
+.ar-tools {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.ar-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  max-height: 52px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: var(--panel);
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+
+.ar-tool.on { background: var(--main); }
+.ar-tool:active { background: rgba(255, 255, 255, 0.2); }
+
+.ar-tool i {
+  display: block;
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.ar-tool svg { width: 62%; height: 62%; }
+
+/* ---------- Guess ---------- */
+
+.ar-guess {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ar-label {
+  margin: 0;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.1;
+  opacity: 0.85;
+}
+
+.ar-prev-label { margin-top: 14px; }
+
+.ar-form {
+  display: flex;
+  gap: 8px;
+}
+
+.ar-input {
+  flex: 1;
+  min-width: 0;
+  height: 64px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 26px;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.ar-send {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r);
+  background: var(--main);
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+
+.ar-send svg { width: 30px; height: 30px; }
+.ar-send:active { transform: scale(0.95); }
+
+.ar-solved {
+  padding: 14px 18px;
+  border-radius: var(--r);
+  background: var(--panel);
+  font-size: 36px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ar-prev {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.ar-prev li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 18px;
+  border-radius: var(--r);
+  background: var(--panel);
+  font-weight: 500;
+  font-size: 24px;
+}
+
+.ar-prev li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+
+.ar-prev li.close {
+  background: #f3c443;
+  color: var(--ink);
+}
+
+.ar-prev li b {
+  flex: none;
+  font-weight: 700;
+  font-size: 18px;
+  text-transform: uppercase;
+}
+
+/* ---------- Result ---------- */
+
+.ar-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ar-big {
+  max-width: 100%;
+  padding: 16px 26px;
+  border-radius: var(--r);
+  background: var(--panel);
+  font-size: 46px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+

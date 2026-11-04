@@ -1,14 +1,14 @@
-/* Articulate — phone controller. Same look as the TV: almost-black icon-pattern backdrop, rounded bars in the player's colour. */
+/* Articulate — phone controller. Same look as the TV: almost-black backdrop with faint diagonal lines, rounded bars in the player's colour. */
 
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=block');
 
-@property --bg { syntax: '<color>'; inherits: true; initial-value: #131217; }
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #0b0a0e; }
 
 :root {
-  --ar-lobby: #131217;
-  --ar-pick: #131217;
-  --ar-draw: #131217;
-  --ar-win: #131217;
+  --ar-lobby: #0b0a0e;
+  --ar-pick: #0b0a0e;
+  --ar-draw: #0b0a0e;
+  --ar-win: #0b0a0e;
 }
 
 body[data-game='articulate'] {
@@ -22,7 +22,7 @@ body[data-game='articulate'] {
   --light: #a9d4f5;
   --ink: #232733;
   --paper: #fbfaf6;
-  --panel: rgba(255, 255, 255, 0.09);
+  --panel: rgba(255, 255, 255, 0.12);
   --r: 14px;
   position: fixed;
   inset: 0;
@@ -33,17 +33,16 @@ body[data-game='articulate'] {
   font-weight: 600;
   color: #fff;
   background: var(--bg);
-  transition: --bg 0.6s;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-.ar { --bg: #131217; }
+.ar { --bg: #0b0a0e; }
 
 .ar .hidden { display: none !important; }
 
-/* ---------- Backdrop: the screen's colour with faint doodles drifting across ---------- */
+/* ---------- Backdrop: almost black with faint diagonal lines ---------- */
 
 .ar-backdrop {
   position: absolute;
@@ -56,14 +55,15 @@ body[data-game='articulate'] {
   content: '';
   position: absolute;
   inset: -390px;
-  background: url('doodles.svg') 0 0 / 390px 390px;
-  opacity: 0.11;
-  animation: ar-doodles 70s linear infinite;
+  background: url('assets/diagonal_01.png') 0 0 / 384px 384px;
+  opacity: 0.05;
+  animation: ar-drift 100s linear infinite; /* slow, endless drift */
 }
 
-@keyframes ar-doodles {
-  to { transform: translate(390px, 390px); }
+@keyframes ar-drift {
+  to { transform: translate(384px, 384px); }
 }
+
 
 /* ---------- Name bar: the player's colour, their character, their name ---------- */
 
@@ -75,11 +75,10 @@ body[data-game='articulate'] {
   align-items: center;
   gap: 12px;
   margin: calc(10px + env(safe-area-inset-top)) 12px 0;
-  padding: 7px 18px 7px 7px;
+  padding: 7px;
   height: 74px;
   border-radius: var(--r);
   background: var(--panel);
-  transition: background 0.3s;
 }
 
 .ar-head.has-color { background: var(--main); }
@@ -100,17 +99,14 @@ body[data-game='articulate'] {
   height: 88%;
 }
 
-.ar-tag {
-  position: absolute;
-  right: -9px;
-  top: -9px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #f3c443;
+.ar-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2a2730;
 }
 
-.ar-tag svg { display: block; width: 100%; height: 100%; }
+.ar-badge svg { width: 62%; height: 62%; }
 
 .ar-name {
   flex: 1;
@@ -148,7 +144,6 @@ body[data-game='articulate'] {
   cursor: pointer;
   -webkit-appearance: none;
   touch-action: manipulation;
-  transition: transform 0.08s, opacity 0.2s;
 }
 
 .ar-btn:not(:disabled):active { transform: scale(0.97); }
@@ -172,7 +167,7 @@ body[data-game='articulate'] {
   min-width: 60px;
   height: 46px;
   padding: 0 12px;
-  border-radius: 23px;
+  border-radius: 11px;
   background: var(--panel);
   font-size: 28px;
   line-height: 46px;
@@ -245,7 +240,7 @@ body[data-game='articulate'] {
 .ar-canvas-wrap {
   flex: none;
   align-self: center;
-  border-radius: 16px;
+  border-radius: var(--r);
   overflow: hidden;
   background: var(--paper);
 }
@@ -268,18 +263,13 @@ body[data-game='articulate'] {
   width: 100%;
   padding: 0;
   border: none;
-  border-radius: 9px;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18); /* keeps dark colours visible on the dark backdrop */
+  border-radius: 11px;
   -webkit-appearance: none;
   touch-action: manipulation;
-  transition: transform 0.1s;
 }
 
-/* picked colour: a white ring */
-.ar-swatch.on {
-  box-shadow: inset 0 0 0 4px #fff;
-  transform: scale(1.06);
-}
+/* picked colour: turns into a circle */
+.ar-swatch.on { border-radius: 50%; }
 
 .ar-tools {
   flex: none;
@@ -311,8 +301,7 @@ body[data-game='articulate'] {
   width: var(--d);
   height: var(--d);
   border-radius: 50%;
-  background: var(--pen, #fff);
-  box-shadow: 0 0 0 2px #fff;
+  background: #fff;
 }
 
 .ar-tool svg { width: 62%; height: 62%; }
@@ -383,7 +372,6 @@ body[data-game='articulate'] {
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
-  animation: ar-pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 .ar-prev {
@@ -402,7 +390,7 @@ body[data-game='articulate'] {
   gap: 10px;
   min-height: 52px;
   padding: 8px 18px;
-  border-radius: 12px;
+  border-radius: var(--r);
   background: var(--panel);
   font-weight: 500;
   font-size: 24px;
@@ -413,7 +401,6 @@ body[data-game='articulate'] {
   overflow-wrap: anywhere;
 }
 
-.ar-prev li:first-child { animation: ar-in 0.2s ease-out; }
 
 .ar-prev li.close {
   background: #f3c443;
@@ -447,13 +434,5 @@ body[data-game='articulate'] {
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
-  animation: ar-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
-@keyframes ar-pop {
-  from { transform: scale(0.4); }
-}
-
-@keyframes ar-in {
-  from { opacity: 0; transform: translateY(-10px); }
-}

@@ -7,13 +7,14 @@
   <title>Articulate</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=block" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Luckiest+Guy&display=block" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body data-bg="lobby">
-  <!-- The screen's colour with faint doodles drifting behind everything -->
+  <!-- Almost black with faint diagonal lines behind everything -->
   <div class="backdrop" aria-hidden="true"></div>
+  <div id="texName" class="tex-name hidden"></div>
 
   <div id="stage" class="stage">
 
@@ -30,11 +31,14 @@
       </div>
     </section>
 
+    <!-- 3, 2, 1 before the game starts -->
+    <div id="countdown" class="countdown hidden"></div>
+
     <!-- Game: picking, drawing, turn results -->
     <section id="game" class="screen game">
       <div id="round" class="round panel"></div>
       <div class="status"><span class="rule"></span><span id="status" class="status-text fit"></span><span class="rule"></span></div>
-      <div id="timer" class="timer panel hidden"></div>
+      <div id="timer" class="timer panel"></div>
       <aside id="players" class="players"></aside>
       <div class="board">
         <canvas id="canvas"></canvas>
@@ -56,7 +60,7 @@
   <script src="../../shared/room-host.js"></script>
   <script src="js/board.js"></script>
   <script src="js/words.js"></script>
-  <script src="js/sound.js"></script>
+  <script src="js/textures.js"></script>
   <script src="js/characters.js"></script>
   <script src="js/view.js"></script>
   <script src="js/game.js"></script>
