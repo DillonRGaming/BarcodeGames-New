@@ -14,7 +14,7 @@
 
 BarcodeJoin.registerController('articulate', ({ root, send, onMessage }) => {
   root.innerHTML = '<div class="ar"></div>';
-  const PEN = { c: 0, s: 1, a: 1 }; // the ink colour (the game's suggestion from the profile, then their choice), size and opacity
+  const PEN = { c: 0, s: 1, a: 1 }, PFP = { c: 0, s: 3, a: 1 }, PEN_DRAW = PEN; // the ink colour (the game's suggestion from the profile, then their choice), size and opacity
   const redo = []; // strokes taken back, to put back
   let stage = null, current = null, myName = '';
 
@@ -31,11 +31,24 @@ BarcodeJoin.registerController('articulate', ({ root, send, onMessage }) => {
 
   /* ---------- Drawing: strokes go on the paper and to the TV, sent in batches ---------- */
 
-  let last = null, buffer = [], flushTimer = null;
+  // Stabilising: the pen point follows the finger a fraction of the way each move, which irons out the wobble
+  // (a bit on the drawing screen, more on the profile picture); the pen catches up to the finger when it lifts.
+  let last = null, raw = null, buffer = [], flushTimer = null, follow = 0.5;
   const flush = () => { if (buffer.length) { send({ type: 'pts', p: buffer }); buffer = []; } };
+  const lobby = () => current && current.screen === 'lobby';
+  const lay = (x, y) => {
+    x = Math.round(x); y = Math.round(y);
+    if (Math.abs(x - last[0]) + Math.abs(y - last[1]) < 4) return;
+    last = [x, y];
+    buffer.push(x, y);
+    stage.board.extend([x, y]);
+    stage.changed();
+  };
   const pen = {
     down(x, y) {
-      last = [x, y];
+      last = [x, y]; raw = [x, y];
+      const PEN = lobby() ? PFP : PEN_DRAW; // the profile picture is black and thick, nothing else
+      follow = lobby() ? 0.3 : 0.5;
       redo.length = 0;
       stage.board.add({ t: 'l', c: PEN.c, s: PEN.s, a: PEN.a, p: [x, y] });
       send({ type: 'line', c: PEN.c, s: PEN.s, a: PEN.a, p: [x, y] });
@@ -43,13 +56,14 @@ BarcodeJoin.registerController('articulate', ({ root, send, onMessage }) => {
       stage.changed();
     },
     move(x, y) {
-      if (Math.abs(x - last[0]) + Math.abs(y - last[1]) < 4) return;
-      last = [x, y];
-      buffer.push(x, y);
-      stage.board.extend([x, y]);
-      stage.changed();
+      raw = [x, y];
+      lay(last[0] + (x - last[0]) * follow, last[1] + (y - last[1]) * follow);
     },
-    up() { clearInterval(flushTimer); flush(); tools(); },
+    up() {
+      for (let i = 0; i < 6; i++) lay(last[0] + (raw[0] - last[0]) * follow, last[1] + (raw[1] - last[1]) * follow);
+      lay(raw[0], raw[1]);
+      clearInterval(flushTimer); flush(); tools();
+    },
   };
 
   /* ---------- Tools: colour, size, opacity, undo, redo (the bar under the paper, in stage.js) ---------- */
@@ -112,7 +126,7 @@ BarcodeJoin.registerController('articulate', ({ root, send, onMessage }) => {
     if (data.type === 'profile') { PEN.c = data.ink ?? PEN.c; tools(); myName = data.name; return stage.setName(current && current.screen === 'draw' ? current.word : myName); } // white paper for everyone; the game gives each player their ink
     if (data.type === 'screen') {
       // a new drawing (a new screen) starts on a clean sheet; repeats of the same one leave it be
-      if (!current || current.id !== data.id || current.screen !== data.screen) { stage.board.clear(); stage.changed(); redo.length = 0; }
+      if (!current || current.id !== data.id || current.screen !== data.screen) { stage.board.clear(); stage.changed(); redo.length = 0; stage.transition(); }
       current = data;
       stage.showPaper(data.screen === 'lobby' || data.screen === 'draw');
       if (data.screen === 'draw') stage.setTools(toolState()); else stage.setTools(null);

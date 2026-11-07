@@ -2169,7 +2169,7 @@ function seatLeave(i) {
 }
 /** a stroke of their self-portrait, as sent from their phone (line, pts, fill, undo, clear) */
 function seatDraw(i, op) {
-  if (op && 'c' in op) op = { ...op, c: INK0 + i }; // one ink only: the colour the game gave this seat
+  if (op && 'c' in op) op = { ...op, c: 0, s: 3, a: 1 }; // profile pictures are black and thick, nothing else
   if (!applyOp(portraits[i].board, op)) return;
   portraits[i].fresh = true;
 }
@@ -2304,7 +2304,9 @@ function stepBig(dt) {
 
 /* ---------- clouds: a deep layer of billowing cloud between the town and the sky, so going up passes through it and
    comes out above a sea of cloud tops. Each billow is a card with a painted puff: a noisy round mass lit from above
-   (bright tops, blue-grey undersides), thousands of tiny wisps at its edge ---------- */
+   (bright tops, blue-grey undersides), thousands of tiny wisps at its edge. They drift to the right (stepClouds) ---------- */
+const cloudCards = []; window.__clouds = cloudCards; // dev: look at them from the console
+const CLOUD_DRIFT = { near: 0.3, far: 1.7 }; // metres a second to the right: the clouds at the back drift faster than the ones in front
 {
   const S = 192;
   const hash = (x, y, s) => { const h = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return h - Math.floor(h); };
@@ -2349,9 +2351,24 @@ function stepBig(dt) {
     m.scale.set(w * pick([1, -1]), w * range(0.75, 1), 1);
     m.position.set(x, range(CLOUDS.y0, top), z);
     m.matrixAutoUpdate = false; m.updateMatrix();
-    scene.add(m);
+    m.userData.v = CLOUD_DRIFT.near + (CLOUD_DRIFT.far - CLOUD_DRIFT.near) * (CLOUDS.z1 - z) / (CLOUDS.z1 - CLOUDS.z0);
+    scene.add(m); cloudCards.push(m);
   }
+  cloudCards.x0 = CLOUDS.x0; cloudCards.x1 = CLOUDS.x1;
 }
+/** the cloud deck drifts right, wrapping round; only drawn up in the sky (the street is cached, so moving clouds redraw it) */
+function stepClouds(dt) {
+  if (camera.position.y < CLOUD_VISIBLE_Y) return false;
+  const span = cloudCards.x1 - cloudCards.x0;
+  for (const m of cloudCards) {
+    m.position.x += m.userData.v * dt;
+    if (m.position.x > cloudCards.x1) m.position.x -= span;
+    m.updateMatrix();
+  }
+  return true;
+}
+const CLOUD_VISIBLE_Y = 6; // below this the camera is down in the town and can't see them
+window.__camera = camera; // dev: look at the camera from the console
 
 bakeSolid();
 bake(panes, new THREE.MeshStandardMaterial({ map: lattice(), roughness: 0.25, metalness: 0.05, envMap: envTex, envMapIntensity: 0.6 }));
@@ -2837,6 +2854,7 @@ renderer.setAnimationLoop(() => {
     if (Math.abs(targetX - camX) < 1e-3) camX = targetX;
     placeCamera();
   }
+  if (stepClouds(dt)) { dirty = true; streetStale = true; }
   if (doodle.step(dt)) dirty = true;
   stepPortraits(dt);
   if (stepMenu(dt)) dirty = true;

@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guess</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}</style></head>
+<body data-game="articulate"><div id="root"></div><link rel="stylesheet" href="controller.css">
+<script>
+window.BarcodeJoin={registerController:(_,fn)=>{window.__fn=fn}};
+</script>
+<script src="board.js"></script><script src="controller.js"></script>
+<script>
+let cb;window.__fn({root:document.getElementById('root'),send:(m)=>console.log('send',m),onMessage:(f)=>{cb=f}});
+setTimeout(()=>cb({type:'profile',name:'PENNY',ink:0}),300);
+setTimeout(()=>cb({type:'screen',screen:'guess',id:1,guesses:[{text:'tent'},{text:'castle',close:false},{text:'tower',close:true},{text:'lighthouse?',close:true}],solved:null}),600);
+</script></body></html>

@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Articulate 3D phone UI mockups</title>
+<style>
+@font-face{font-family:CF;src:url(assets/cafe-francoise.otf)}
+*{box-sizing:border-box;margin:0}
+body{background:#17161c;color:#fff;font-family:system-ui;padding:32px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:40px 28px;justify-items:center;max-width:1700px;margin:auto}
+.cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+.cell>b{font:600 15px system-ui;opacity:.7}
+.phone{width:280px;height:580px;border-radius:38px;border:8px solid #000;outline:2px solid #3a3944;overflow:hidden;position:relative;display:flex;flex-direction:column;align-items:center;padding:22px 16px 20px;gap:14px;font-family:CF;--p:#e0584c}
+.word{font-size:34px;text-align:center;line-height:1;position:relative;z-index:2}
+.row{display:flex;justify-content:space-between;width:100%;align-items:center;position:relative;z-index:2;font-size:20px}
+.paper{width:100%;aspect-ratio:1;background:var(--p);position:relative;z-index:2;margin-top:auto;margin-bottom:auto}
+.paper svg{position:absolute;inset:0;width:100%;height:100%}
+.cl{position:absolute;inset:0;z-index:1;pointer-events:none}
+.cl i{position:absolute;background:#fff;border-radius:50%;filter:blur(14px);opacity:.9}
+.dot{width:34px;height:34px;border-radius:50%;background:var(--p)}
+/* 1 sky + paper (as built) */
+.s1{background:linear-gradient(#6a9be0,#9cc4ef 55%,#dcebf7);color:#fff}.s1 .paper{box-shadow:0 8px 20px #0003}
+/* 2 painted wood easel sign */
+.s2{background:repeating-linear-gradient(90deg,#b07a45 0 38px,#a06c3b 38px 40px,#b98550 40px 78px,#96663a 78px 80px);color:#fff7e0}.s2 .word{text-shadow:2px 2px 0 #5a3716}.s2 .paper{border:10px solid #7a4e26;box-shadow:inset 0 0 0 3px #d9a86c}.s2 .row{text-shadow:2px 2px 0 #5a3716}
+/* 3 cafe chalkboard */
+.s3{background:#26332c;color:#f1eee2;box-shadow:inset 0 0 0 10px #7a4e26,inset 0 0 40px #000a;padding:34px 26px 28px}.s3 .word{border-bottom:2px dashed #f1eee288;padding-bottom:8px;width:100%}.s3 .paper{border:3px solid #f1eee2}
+/* 4 striped awning */
+.s4{background:#f6ecd6;color:#8a2a22}.s4::before{content:"";position:absolute;inset:0 0 auto;height:110px;background:repeating-linear-gradient(90deg,#d6402f 0 28px,#fff 28px 56px);border-bottom:10px solid #d6402f;border-radius:0 0 40% 40%/0 0 18px 18px}.s4 .word{margin-top:62px;color:#8a2a22}.s4 .row{color:#8a2a22}.s4 .paper{border:6px solid #fff;box-shadow:0 4px 0 #0002}
+.s4 .word:first-child{margin-top:96px}
+/* 5 painted shutters */
+.s5{background:#c9b38a;color:#fff;box-shadow:inset 62px 0 0 -0px #2f6f8f}.s5::before,.s5::after{content:"";position:absolute;top:0;bottom:0;width:30px;background:repeating-linear-gradient(#2f6f8f 0 10px,#245a75 10px 14px)}.s5::before{left:0}.s5::after{right:0}.s5{box-shadow:none}.s5 .word{color:#2a2a2a}.s5 .row{color:#2a2a2a}.s5 .paper{width:calc(100% - 60px);border:8px solid #fff}.s5 .word,.s5 .row{padding:0 24px}
+/* 6 stone & lantern light */
+.s6{background:radial-gradient(circle at 50% 30%,#ffd98a 0,#e0a35a 30%,#6c5a4a 70%),#6c5a4a;color:#fff6e0;background-blend-mode:normal}.s6::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,#0000 0 46px,#0003 46px 48px),repeating-linear-gradient(90deg,#0000 0 70px,#0002 70px 72px);mix-blend-mode:multiply}.s6 .paper{box-shadow:0 0 0 4px #fff6e0,0 14px 30px #0006;width:calc(100% - 16px)}
+/* 7 vintage poster */
+.s7{background:#efe2c2;color:#1d3557;border:10px solid #c8392f;border-width:12px}.s7 .word{font-size:42px;color:#c8392f;text-transform:uppercase;letter-spacing:2px}.s7 .row{border-top:3px solid #1d3557;border-bottom:3px solid #1d3557;padding:4px 0}.s7 .paper{border:4px solid #1d3557;outline:2px solid #1d3557;outline-offset:4px}
+/* 8 roof tiles */
+.s8{background:radial-gradient(circle at 50% 100%,#0000 52%,#00000030 54% 60%,#0000 62%) 0 0/36px 24px,#c4572e;color:#fff2de}.s8 .word{background:#fff2de;color:#a8431f;padding:6px 14px;border-radius:4px}.s8 .paper{border:6px solid #fff2de}
+/* 9 painter's palette */
+.s9{background:#fbf8f1;color:#333}.s9 .word{color:#333}.s9 .paper{box-shadow:0 0 0 1px #0002,0 10px 24px #0002}.s9::before{content:"";position:absolute;width:150px;height:110px;right:-30px;bottom:-20px;background:#d9b98a;border-radius:50% 40% 60% 45%;box-shadow:-70px -10px 0 -30px #e0584c,-95px 20px 0 -34px #4a8fd8,-40px 30px 0 -34px #f2c94c}.s9 .dot{border:3px solid #333}
+/* 10 night street */
+.s10{background:linear-gradient(#0f1a3a,#2b3a6b 60%,#6b5a8a);color:#ffe9b0}.s10::before{content:"";position:absolute;left:50%;top:-60px;width:260px;height:260px;transform:translateX(-50%);background:radial-gradient(#ffd87a88,#0000 65%)}.s10 .paper{box-shadow:0 0 40px #ffd87a66}.s10 .word{text-shadow:0 0 14px #ffd87a}
+</style></head><body><h2 style="text-align:center;margin:0 0 24px;font:600 20px system-ui">Draw your profile picture</h2><div class="grid" id="g2"></div><h2 style="text-align:center;margin:56px 0 24px;font:600 20px system-ui">Drawing the word</h2><div class="grid" id="g"></div>
+<script>
+const names=['Sky and paper','Painted wood sign','Café chalkboard','Striped awning','Shutters','Lantern on stone','Vintage poster','Roof tiles','Painter’s palette','Night street'];
+const art=`<svg viewBox="0 0 100 100" fill="none" stroke="#111" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M42 88h16L56 40H44z"/><path d="M40 40h20l-4-14H44z"/><path d="M47 26v-8h6v8"/><path d="M30 88h40"/><path d="M62 30l24-6M62 24l22 14M38 30L14 24M38 24L16 38"/><path d="M45 56h10M46 70h8"/></svg>`;
+const clouds=`<div class="cl"><i style="left:-20px;top:40px;width:150px;height:60px"></i><i style="right:-30px;top:200px;width:170px;height:70px"></i><i style="left:30px;bottom:30px;width:200px;height:70px"></i></div>`;
+g.innerHTML=names.map((n,i)=>`<div class="cell"><b>${i+1}. ${n}</b><div class="phone s${i+1}">${i==0?clouds:''}<div class="row"><span class="dot"></span><span>0:42</span></div><div class="word">Lighthouse</div><div class="paper">${art}</div></div></div>`).join('');
+const face=`<svg viewBox="0 0 100 100" fill="none" stroke="#111" stroke-width="2.6" stroke-linecap="round"><circle cx="50" cy="50" r="38"/><circle cx="37" cy="40" r="3"/><circle cx="63" cy="40" r="3"/><path d="M32 60Q50 78 68 60"/></svg>`;
+g2.innerHTML=names.map((n,i)=>`<div class="cell"><b>${i+1}. ${n}</b><div class="phone s${i+1}">${i==0?clouds:''}<div class="word">Penny</div><div class="paper">${face}</div></div></div>`).join('');
+</script></body></html>

@@ -7,8 +7,10 @@
  *       for each player in turn, ROUNDS times: [pick → draw → result → scoreboard → glide on to the next easel] →
  *       the last scoreboard names the winner → (VIP) back to the lobby
  *
- * Dev keys: Space start (adds bots if needed) / back to the lobby · B add a bot · K skip ahead · L back to the lobby
+ * Dev tools: backtick opens the mod menu (mod-menu.js). Dev keys: Space start (adds bots if needed) / back to the lobby · B add a bot · K skip ahead · L back to the lobby
  */
+
+import { ModMenu } from './mod-menu.js';
 
 const GAME_ID = 'articulate';
 const MAX_PLAYERS = 8;
@@ -431,6 +433,22 @@ export function startGame(stage) {
     addPlayer({ id: `bot-${n}`, name }, true);
   }
 
+  /** dev: take a player out (in the lobby; during the game, only phones, who can come back) */
+  function removePlayer(p) {
+    if (state.phase === 'lobby') {
+      state.players = state.players.filter((x) => x !== p);
+      if (!p.bot) net.kick(p.id);
+      stage.seatLeave(p.seat);
+      lobbyChanged();
+    } else if (!p.bot) playerGone(p.id);
+  }
+  /** dev: make a guesser say the word; shorten the clock to `sec` seconds */
+  const forceGuess = (p) => guess(Object.assign(p, { lastGuessAt: 0 }), state.word);
+  function shorten(sec) {
+    if (state.deadline) state.deadline = Math.min(state.deadline, Date.now() + sec * 1000);
+  }
+  new ModMenu({ state, startPlaying, addBot, removePlayer, pickWord, endTurn, revealLetter, backToLobby, forceGuess, shorten });
+
   function botTick(now) {
     if (state.phase !== 'draw') return;
     const elapsed = (now - state.drawStart) / (DRAW_TIME * 1000);
@@ -448,14 +466,14 @@ export function startGame(stage) {
   function botDraw() {
     let pen = state.botPen;
     if (!pen || Math.random() < 0.06) {
-      pen = state.botPen = { x: 200 + Math.random() * 600, y: 200 + Math.random() * 600, a: Math.random() * Math.PI * 2 };
+      pen = state.botPen = { x: 200 + Math.random() * 600, y: 200 + Math.random() * 850, a: Math.random() * Math.PI * 2 };
       stage.draw({ type: 'line', c: Math.floor(Math.random() * 16), s: Math.floor(Math.random() * 3), p: [Math.round(pen.x), Math.round(pen.y)] });
     }
     const pts = [];
     for (let i = 0; i < 4; i++) {
       pen.a += (Math.random() - 0.5) * 0.9;
       pen.x = Math.max(30, Math.min(970, pen.x + Math.cos(pen.a) * 18));
-      pen.y = Math.max(30, Math.min(970, pen.y + Math.sin(pen.a) * 18));
+      pen.y = Math.max(30, Math.min(1220, pen.y + Math.sin(pen.a) * 18)); // the paper is 1000 wide, 1250 tall
       pts.push(Math.round(pen.x), Math.round(pen.y));
     }
     stage.draw({ type: 'pts', p: pts });

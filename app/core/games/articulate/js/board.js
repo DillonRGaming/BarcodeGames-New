@@ -1,6 +1,6 @@
 /**
  * DrawBoard — the drawing canvas, shared by the phone (draws) and the TV (replays).
- * Two identical copies: web/games/articulate/board.js and app/core/games/articulate/js/board.js. Keep them in sync.
+ * Identical copies: web/games/articulate/board.js, app/core/games/articulate/js/board.js and app/core/games/articulate-3d/js/board.js. Keep them in sync.
  *
  * Everything is a list of ops in a 0..1000 square, so any canvas size replays the same picture:
  *   { t: 'l', c, s, p: [x, y, x, y, ...] }   line: colour index, size index, points

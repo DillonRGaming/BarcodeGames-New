@@ -11,7 +11,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
 const SKY = { top: '#6a9be0', mid: '#9cc4ef', low: '#dcebf7' }; // the TV's sky, as it comes out after the TV's tone mapping
-const CLOUDS = { count: 260, y0: -7, y1: -2.4, z0: -70, z1: -4, drift: 1.6 }; // drift: metres a second to the right, forever (the clouds wrap round off-screen)
+const CLOUDS = { count: 260, y0: -7, y1: -2.4, z0: -70, z1: -4, drift: 0.5 }; // drift: metres a second to the right, forever (the clouds wrap round off-screen)
 
 // seeded, so the clouds are the same every time
 const rnd = (() => { let s = 4242421; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
@@ -151,7 +151,8 @@ export async function mountStage(container) {
 
   function signSize() {
     const top = Math.tan(THREE.MathUtils.degToRad(signCam.fov / 2)) * -SIGN.z;
-    const W = Math.min(top * 2 * signCam.aspect * 0.86, 0.6);
+    // every board is this wide, on every screen: as wide as fits the tallest stack (sign, paper, tool bar, with their gaps)
+    const W = Math.min(top * 2 * signCam.aspect * 0.86, 0.6, (2 * top - 2 * 0.045 - 2 * 0.075) / (1 / SIGN.ratio + ASPECT + 0.57));
     return { top, W, H: W / SIGN.ratio };
   }
   function placeSign() {
@@ -163,6 +164,7 @@ export async function mountStage(container) {
   /** a board like the join sign: wood frame, near-black face (`tex`), and iron wires of `wire` metres up off the top */
   function frame(W, H, tex, wire, wood, iron) {
     const { f } = SIGN, grp = new THREE.Group();
+    grp.userData.board = true;
     const add = (geo, mat, x, y, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); grp.add(m); };
     const t = () => [Math.random() * 7, Math.random() * 7];
     for (const k of [-1, 1]) {
@@ -175,13 +177,64 @@ export async function mountStage(container) {
   }
   const disposeGroup = (grp, wood, iron) => grp.traverse((m) => { m.geometry?.dispose(); m.material?.map && m.material !== wood && m.material !== iron && m.material.map.dispose(); });
 
+
+  /* ---------- changing screens: the old boards are pulled up off the top on their wires; then the new ones, the name
+     sign first, are lowered back down one after another, slowing as they settle ---------- */
+
+  const anims = []; // { g, base, z0, kind: 'in' | 'out', t0, dur, from }
+  let transitionUntil = 0, arriveAt = 0;
+  const nowS = () => performance.now() / 1000;
+  const inTransition = () => nowS() < transitionUntil;
+  const boardsOf = (grp) => (grp.userData.board ? [grp] : grp.children.filter((c) => c.userData.board));
+  const hasBoards = () => signScene.children.some((c) => c.userData.board || c.children.some((k) => k.userData.board));
+  /** the boards of a group, lowering in from above: the higher a board hangs, the sooner it comes down */
+  function enterGroup(grp) {
+    if (!inTransition()) return;
+    const { top } = signSize(), D = top * 2, t = Math.max(nowS(), arriveAt) + (grp === sign ? 0 : 0.5); // the name comes first, the rest wait a little
+    boardsOf(grp).forEach((g) => {
+      const base = g.position.y;
+      g.position.y = base + D;
+      anims.push({ g, base, z0: g.position.z, kind: 'in', t0: t + (top - base) * 0.9, dur: 1.1, from: D });
+    });
+  }
+  /** takes a group's boards away (pulled up, the lowest first), then frees it */
+  function retire(grp, wood, iron) {
+    const done = () => { signScene.remove(grp); disposeGroup(grp, wood, iron); };
+    if (!inTransition()) return done();
+    const { top } = signSize(), D = top * 2, t = nowS();
+    let end = t;
+    boardsOf(grp).forEach((g) => {
+      const t0 = t + (g.position.y + top) * 0.12;
+      anims.push({ g, base: g.position.y, z0: g.position.z, kind: 'out', t0, dur: 0.45, from: D });
+      end = Math.max(end, t0 + 0.45);
+    });
+    setTimeout(done, (end - t) * 1000 + 50);
+  }
+  function stepAnims(now) {
+    for (let i = anims.length - 1; i >= 0; i--) {
+      const a = anims[i], u = (now - a.t0) / a.dur;
+      if (u < 0) continue;
+      // while one is away from its place it travels a little behind the others, so it slides behind the sign, not over it
+      const behind = () => { a.g.position.z = a.z0 - 0.04 * Math.min(1, Math.abs(a.g.position.y - a.base) / 0.15); };
+      if (a.kind === 'out') {
+        a.g.position.y = a.base + a.from * Math.min(1, u) ** 2; behind(); // quickening upward
+        if (u >= 1) anims.splice(i, 1);
+      } else if (u < 1) {
+        a.g.position.y = a.base + a.from * (1 - u) ** 3; behind(); // slowing as it settles
+      } else {
+        a.g.position.y = a.base; a.g.position.z = a.z0;
+        anims.splice(i, 1);
+      }
+    }
+  }
+
   let signToken = 0;
   async function buildSign(name) {
     const token = ++signToken;
     try { await document.fonts.load('700 100px "Cafe Francoise"'); } catch { /* falls back to sans-serif */ }
     const { wood, iron } = await mats;
     if (token !== signToken) return;
-    if (sign) { signScene.remove(sign); disposeGroup(sign, wood, iron); sign = null; }
+    if (sign) { signScene.remove(sign); disposeGroup(sign, wood, iron); sign = null; } // the sign stays up between screens; a new text just swaps in
     if (!name) return;
     const { W, H } = signSize();
     const c = document.createElement('canvas'), g = c.getContext('2d');
@@ -195,7 +248,7 @@ export async function mountStage(container) {
     g.fillText(name, c.width / 2, c.height / 2 + 4);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const grp = frame(W, H, tex, 1.2, wood, iron);
-    sign = grp; signScene.add(sign); placeSign();
+    sign = grp; signScene.add(sign); placeSign(); enterGroup(sign);
   }
 
 
@@ -208,7 +261,7 @@ export async function mountStage(container) {
     try { await document.fonts.load('700 100px "Cafe Francoise"'); } catch { /* falls back to sans-serif */ }
     const { wood, iron } = await mats;
     if (token !== guessToken) return;
-    if (guess) { signScene.remove(guess.grp); disposeGroup(guess.grp, wood, iron); guess = null; }
+    if (guess) { retire(guess.grp, wood, iron); guess = null; }
     if (!guessData) { stage.inputRect = null; return; }
     const { top, W, H: Hs } = signSize(), gap = 0.075, edge = 0.045;
     const Hi = W / SIGN.ratio, solved = !!guessData.solved;
@@ -223,7 +276,7 @@ export async function mountStage(container) {
       const wire = gap - SIGN.f * 2 + 0.004; // each board hangs from the one above, wire to the frame above
       const g = frame(b.W, b.H, b.tex, wire, wood, iron); g.position.set(0, b.y, SIGN.z); grp.add(g);
     }
-    guess = { grp, list, input }; signScene.add(grp);
+    guess = { grp, list, input }; signScene.add(grp); enterGroup(grp);
     paintGuess(); layoutInput();
   }
   function paintGuess() {
@@ -270,7 +323,7 @@ export async function mountStage(container) {
     try { await document.fonts.load('700 100px "Cafe Francoise"'); } catch { /* falls back to sans-serif */ }
     const { wood, iron } = await mats;
     if (token !== choiceToken) return;
-    if (choices) { signScene.remove(choices.grp); disposeGroup(choices.grp, wood, iron); choices = null; }
+    if (choices) { retire(choices.grp, wood, iron); choices = null; }
     if (!choiceData) return;
     const { top, W, H: Hs } = signSize(), gap = 0.075, edge = 0.045, n = choiceData.length;
     const yTop = top - edge - Hs - gap, area = yTop - (-top + edge);
@@ -282,7 +335,7 @@ export async function mountStage(container) {
       const y = y0 - H / 2 - i * (H + gap), g = frame(W, H, tex, gap - SIGN.f * 2 + 0.004, wood, iron);
       g.position.set(0, y, SIGN.z); grp.add(g); boards.push({ c, tex, y, H, word });
     });
-    choices = { grp, boards, W }; signScene.add(grp); paintChoices();
+    choices = { grp, boards, W }; signScene.add(grp); enterGroup(grp); paintChoices();
   }
   function paintChoices() {
     if (!choices) return;
@@ -359,16 +412,17 @@ export async function mountStage(container) {
     const token = ++paperToken;
     const { wood, iron } = await mats;
     if (token !== paperToken) return;
-    if (paperGrp) { signScene.remove(paperGrp); disposeGroup(paperGrp, wood, iron); paperGrp = null; }
+    if (paperGrp) { retire(paperGrp, wood, iron); paperGrp = null; }
     layout = null;
     if (!paperOn) return;
     const { top, W, H: Hs } = signSize(), gap = 0.075, edge = 0.045, f = SIGN.f;
     const yTop = top - edge - Hs - gap, yBot = -top + edge;
     const bh = toolsData ? BAR.ratio : 0, extra = toolsData ? gap : 0;
     const pw = Math.min(W, (yTop - yBot - extra) / (ASPECT + bh)), ph = pw * ASPECT, barH = pw * bh;
-    const block = ph + extra + barH, yb = (yTop + yBot) / 2 + block / 2, y = yb - ph / 2;
+    const block = ph + extra + barH, yb = toolsData ? (yTop + yBot) / 2 + block / 2 : yTop, y = yb - ph / 2; // with no tools the paper hangs right under the sign
     const wire = (top - edge - Hs - f) - (yb + f);
-    paperGrp = frame(pw, ph, paperTex, wire, wood, iron); paperGrp.position.set(0, y, SIGN.z); signScene.add(paperGrp);
+    paperGrp = new THREE.Group();
+    const pf = frame(pw, ph, paperTex, wire, wood, iron); pf.position.set(0, y, SIGN.z); paperGrp.add(pf);
     const w = container.clientWidth || window.innerWidth, h = container.clientHeight || window.innerHeight, k = (h / 2) / top;
     layout = { cx: w / 2, cy: h / 2 - y * k, w: pw * k, h: ph * k };
     bar = null;
@@ -376,10 +430,11 @@ export async function mountStage(container) {
       const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round(1024 * bh);
       const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
       const by = yb - ph - gap - barH / 2, bg = frame(pw, barH, tex, gap - f * 2 + 0.004, wood, iron);
-      bg.position.set(0, by, SIGN.z); paperGrp.add(bg); bg.position.set(0, by - y, 0);
+      bg.position.set(0, by, SIGN.z); paperGrp.add(bg);
       bar = { c, tex, ctrls: [] }; layout.bar = { cx: w / 2, cy: h / 2 - by * k, w: pw * k, h: barH * k };
       paintBar();
     }
+    signScene.add(paperGrp); enterGroup(paperGrp);
   }
 
   const stage = { board, onDraw: null, onLayout: null, onPick: null, onTool: null, inputRect: null };
@@ -445,6 +500,7 @@ export async function mountStage(container) {
       m.position.x += CLOUDS.drift * dt;
       if (m.position.x > m.userData.half) m.position.x -= m.userData.half * 2;
     }
+    stepAnims(nowS());
     if (paperFresh) { paperFresh = false; paintPaper(); }
     renderer.clear();
     renderer.render(scene, camera);
@@ -455,13 +511,19 @@ export async function mountStage(container) {
 
   Object.assign(stage, {
     setColour(c) { colour = c; paintPaper(); },
-    setName(n) { signName = n || ''; return buildSign(signName); },
+    setName(n) {
+      n = n || '';
+      if (n === signName && sign) return Promise.resolve(); // already up: leave it be
+      signName = n; return buildSign(signName);
+    },
     /** the tool bar under the paper: { colour, size, alpha, canUndo, canRedo }, or null to take it away; taps go to stage.onTool({ k, v }) */
     setTools(d) {
       const had = !!toolsData; toolsData = d;
       if (!!d !== had) return buildPaper();
       paintBar();
     },
+    /** a new screen is coming: boards built in the next moment come down, and the ones going are pulled up */
+    transition(sec = 1.2) { transitionUntil = nowS() + sec; arriveAt = nowS() + (hasBoards() ? 0.6 : 0.05); },
     showPaper(on) { if (on === paperOn) return; paperOn = on; buildPaper(); },
     /** the words to pick from (an array of strings), or null; taps go to stage.onPick(index) */
     setChoices(words) { choiceData = words && words.length ? words : null; choicePicked = -1; return buildChoices(); },
@@ -475,6 +537,7 @@ export async function mountStage(container) {
     changed() { paperFresh = true; }, // the board was drawn on
   });
   fit();
+  stage.transition(4); // the first boards come down too (the textures may still be loading)
   window.addEventListener('resize', fit);
   return stage;
 }

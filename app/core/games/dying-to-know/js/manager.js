@@ -4,7 +4,7 @@
 
 const MAX_PLAYERS = 8;
 const DEV_RANDOM_MONEY = false; // testing: everyone starts with $0–$2000 instead of $100
-const DEV_BOTS = 6; // simulated players for testing; 0 to turn off
+const DEV_BOTS = 0; // simulated players for testing; 0 to turn off
 
 class GameManager {
   constructor({ room, camera, sound, gridEl, players = [] }) {

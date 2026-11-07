@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lobby</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}.ar{position:fixed;inset:0}</style></head>
+<body><div class="ar"></div><link rel="stylesheet" href="controller.css"><script src="board.js"></script><script type="module">
+import {mountStage} from './stage.js';
+const s=await mountStage(document.querySelector('.ar'));
+s.showPaper(true);s.setName('PENNY');
+const circ=(cx,cy,r)=>{const p=[];for(let a=0;a<=6.4;a+=.2)p.push(Math.round(cx+r*Math.cos(a)),Math.round(cy+r*Math.sin(a)));return p};
+const arc=[];for(let a=.3;a<=2.85;a+=.15)arc.push(Math.round(500+230*Math.cos(a)),Math.round(520+230*Math.sin(a)));
+[circ(500,500,380),circ(370,400,28),circ(630,400,28),arc].forEach(p=>s.board.add({t:'l',c:0,s:1,p}));
+s.changed();
+</script></body></html>
