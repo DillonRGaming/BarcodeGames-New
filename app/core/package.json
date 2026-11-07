@@ -8,11 +8,14 @@
   "scripts": {
     "start": "electron .",
     "start:local": "electron . --local-server",
-    "articulate": "electron . --game=articulate",
-    "articulate:local": "electron . --game=articulate --local-server"
+    "articulate": "electron . --game=articulate-3d",
+    "articulate:local": "electron . --game=articulate-3d --local-server"
   },
   "devDependencies": {
     "electron": "^39.8.10",
     "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
   }
 }

@@ -1,9 +1,10 @@
 /**
  * DrawBoard — the drawing canvas, shared by the phone (draws) and the TV (replays).
- * Two identical copies: web/games/articulate/board.js and app/core/games/articulate/js/board.js. Keep them in sync.
+ * Identical copies: web/games/articulate/board.js and app/core/games/articulate-3d/js/board.js (the old square 2D game keeps its own, app/core/games/articulate/js/board.js). Keep them in sync.
  *
- * Everything is a list of ops in a 0..1000 square, so any canvas size replays the same picture:
- *   { t: 'l', c, s, p: [x, y, x, y, ...] }   line: colour index, size index, points
+ * Everything is a list of ops in a 0..1000 wide space, 0..1000*aspect tall (aspect 1 = a square; the portrait paper uses
+ * DrawBoard.PORTRAIT), so any canvas size replays the same picture:
+ *   { t: 'l', c, s, a, p: [x, y, x, y, ...] } line: colour index, size index, opacity (0.05..1, default 1), points
  *   { t: 'f', c, x, y }                       bucket fill
  */
 
@@ -17,18 +18,19 @@
   const FILL_TOLERANCE = 60; // summed RGB difference still counted as the same colour (soaks up anti-aliasing)
 
   class DrawBoard {
-    constructor(canvas) {
+    constructor(canvas, aspect = 1) {
       this.canvas = canvas;
+      this.aspect = aspect;
       this.ctx = canvas.getContext('2d', { willReadFrequently: true });
       this.ops = [];
       this.resize(canvas.width || 1000);
     }
 
-    /** Set the pixel size (square) and repaint */
+    /** Set the pixel width (the height follows the aspect) and repaint */
     resize(px) {
       px = Math.max(50, Math.round(px));
       this.canvas.width = px;
-      this.canvas.height = px;
+      this.canvas.height = Math.round(px * this.aspect);
       this.k = px / 1000;
       this.redraw();
     }
@@ -46,8 +48,14 @@
     }
 
     add(op) {
-      if (!DrawBoard.valid(op)) return null;
+      if (!DrawBoard.valid(op, this.aspect)) return null;
       const copy = { ...op, p: op.p ? op.p.slice() : undefined };
+      this.live = null;
+      if (copy.t === 'l' && copy.a < 1) { // see-through lines are repainted whole while they grow, from what was under them
+        this.live = document.createElement('canvas');
+        this.live.width = this.canvas.width; this.live.height = this.canvas.height;
+        this.live.getContext('2d').drawImage(this.canvas, 0, 0);
+      }
       this.ops.push(copy);
       this.paint(copy, 0);
       return copy;
@@ -58,12 +66,13 @@
       const op = this.ops[this.ops.length - 1];
       if (!op || op.t !== 'l' || !Array.isArray(points) || points.length < 2) return;
       const from = op.p.length / 2;
-      for (let i = 0; i + 1 < points.length; i += 2) op.p.push(DrawBoard.clamp(points[i]), DrawBoard.clamp(points[i + 1]));
-      this.paint(op, from);
+      for (let i = 0; i + 1 < points.length; i += 2) op.p.push(DrawBoard.clamp(points[i]), DrawBoard.clamp(points[i + 1], 1000 * this.aspect));
+      if (this.live && op.a < 1) { this.ctx.drawImage(this.live, 0, 0); this.paint(op, 0); } else this.paint(op, from);
     }
 
     undo() {
       if (!this.ops.length) return;
+      this.live = null;
       this.ops.pop();
       this.redraw();
     }
@@ -73,7 +82,7 @@
       this.redraw();
     }
 
-    /** Last point drawn, in the 1000 square (for the TV's pen marker) */
+    /** Last point drawn, in board coordinates (for the TV's pen marker) */
     lastPoint() {
       const op = this.ops[this.ops.length - 1];
       if (!op) return null;
@@ -92,10 +101,12 @@
       ctx.lineWidth = SIZES[op.s] * k;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      ctx.globalAlpha = op.a == null ? 1 : op.a;
       if (n === 1) {
         ctx.beginPath();
         ctx.arc(p[0] * k, p[1] * k, (SIZES[op.s] * k) / 2, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
         return;
       }
       const start = Math.max(0, from - 1);
@@ -103,6 +114,7 @@
       ctx.moveTo(p[start * 2] * k, p[start * 2 + 1] * k);
       for (let i = start + 1; i < n; i++) ctx.lineTo(p[i * 2] * k, p[i * 2 + 1] * k);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     fill(op) {
@@ -162,27 +174,29 @@
       ctx.putImageData(img, 0, 0);
     }
 
-    static clamp(v) {
-      return Math.max(0, Math.min(1000, Math.round(Number(v) || 0)));
+    static clamp(v, max = 1000) {
+      return Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
     }
 
     /** Ops come off the network: only accept well-formed ones */
-    static valid(op) {
+    static valid(op, aspect = 1) {
       if (!op || typeof op !== 'object') return false;
       if (!(op.c >= 0 && op.c < COLORS.length) || Math.floor(op.c) !== op.c) return false;
       if (op.t === 'f') {
         op.x = DrawBoard.clamp(op.x);
-        op.y = DrawBoard.clamp(op.y);
+        op.y = DrawBoard.clamp(op.y, 1000 * aspect);
         return true;
       }
       if (op.t !== 'l' || !(op.s >= 0 && op.s < SIZES.length) || Math.floor(op.s) !== op.s) return false;
       if (!Array.isArray(op.p) || op.p.length < 2 || op.p.length % 2) return false;
-      op.p = op.p.map(DrawBoard.clamp);
+      op.a = op.a == null ? 1 : Math.max(0.05, Math.min(1, Number(op.a) || 1));
+      op.p = op.p.map((v, i) => DrawBoard.clamp(v, i % 2 ? 1000 * aspect : 1000));
       return true;
     }
   }
 
   DrawBoard.COLORS = COLORS;
   DrawBoard.SIZES = SIZES;
+  DrawBoard.PORTRAIT = 1.25; // height : width of the paper on the phone and the easel
   window.DrawBoard = DrawBoard;
 })();

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Articulate — market</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #6f7bd6; }
+    canvas { display: block; touch-action: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "../../node_modules/three/build/three.module.js", "three/addons/": "../../node_modules/three/examples/jsm/" } }
+  </script>
+</head>
+
+<body>
+  <!-- the room server connection and the drawing board are shared with the phones and the other games -->
+  <script src="../../shared/room-host.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/words.js"></script>
+  <script type="module" src="js/market.js"></script>
+</body>
+
+</html>

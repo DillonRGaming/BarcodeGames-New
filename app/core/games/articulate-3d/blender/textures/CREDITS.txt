@@ -1,0 +1,14 @@
+Textures and HDRI from Poly Haven (polyhaven.com), CC0 public domain:
+cobblestone_floor_04
+painted_plaster_wall
+clay_roof_tiles_02
+castle_wall_varriation
+weathered_planks
+wood_shutter
+belfast_sunset_puresky
+kloofendal_48d_partly_cloudy_puresky
+distressed_painted_planks
+clay_plaster
+metal_plate
+concrete_floor_worn_001
+bark_brown_02

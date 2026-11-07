@@ -1,0 +1,49 @@
+{
+  "look": "5c late afternoon",
+  "background": "renders/full/5c late afternoon.png",
+  "render": [
+    64,
+    36
+  ],
+  "camera": {
+    "position": [
+      3.5999999046325684,
+      -5.199999809265137,
+      1.75
+    ],
+    "forward": [
+      -0.2334631234407425,
+      0.9672041535377502,
+      -0.10005532205104828
+    ],
+    "up": [
+      -0.023477045819163322,
+      0.09726199507713318,
+      0.9949818849563599
+    ],
+    "lens_mm": 35.0,
+    "sensor_width_mm": 36.0,
+    "sensor_fit": "AUTO"
+  },
+  "sun": {
+    "to_sun": [
+      -0.7424038648605347,
+      -0.5198367834091187,
+      0.4226182699203491
+    ],
+    "energy": 7.5,
+    "colour": [
+      1,
+      0.78,
+      0.55
+    ],
+    "angle_deg": 1.0
+  },
+  "sky": {
+    "hdri": "kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+    "fill": 0.5,
+    "rotation_z": 0.3024716079235077
+  },
+  "exposure": 0.45,
+  "note": "Blender coordinates: Z up. three.js: (x, y, z) -> (x, z, -y)."
+}
